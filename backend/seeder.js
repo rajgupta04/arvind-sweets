@@ -1,20 +1,20 @@
-import mongoose from "mongoose";
 import dotenv from "dotenv";
+import mongoose from "mongoose";
+import Product from "./src/models/Product.js";
 import { sweetsData } from "./src/data/sweetsData.js";
-import Product from "./src/models/productModel.js";
 import connectDB from "./src/config/db.js";
 
 dotenv.config();
-connectDB();
 
 const importData = async () => {
   try {
+    await connectDB();
     await Product.deleteMany();
     await Product.insertMany(sweetsData);
-    console.log("✅ Data Imported Successfully!");
+    console.log("✅ Sweets Data Imported!");
     process.exit();
   } catch (error) {
-    console.error("❌ Error importing data:", error);
+    console.error(error);
     process.exit(1);
   }
 };
