@@ -12,6 +12,9 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@babel/cli": "^7.28.3",
+    "@babel/preset-react": "^7.28.5",
+    "@babel/preset-typescript": "^7.28.5",
     "@vitejs/plugin-react": "^5.1.0",
     "autoprefixer": "^10.4.17",
     "postcss": "^8.4.35",
