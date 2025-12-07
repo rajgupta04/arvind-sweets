@@ -1,6 +1,6 @@
 // TestPage component - fetches and displays sweets data
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import API from '../services/api.js';
 
 function TestPage() {
   const [sweets, setSweets] = useState([]);
@@ -12,7 +12,7 @@ function TestPage() {
       try {
         setLoading(true);
         setError(null);
-        const response = await axios.get('/api/sweets');
+        const response = await API.get('/sweets');
         setSweets(response.data);
       } catch (err) {
         setError(err.message || 'Failed to fetch sweets data');
@@ -77,4 +77,3 @@ function TestPage() {
 }
 
 export default TestPage;
-

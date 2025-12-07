@@ -6,7 +6,9 @@ import { Link } from 'react-router-dom';
 export function UserNav() {
   async function onLogout() {
     try {
-      const response = await fetch('/api/auth/logout', {
+      const base = import.meta.env.VITE_BACKEND_URL || '';
+      const url = base ? `${base}/api/auth/logout` : '/api/auth/logout';
+      const response = await fetch(url, {
         cache: 'no-store'
       });
       if (typeof window !== 'undefined' && window.localStorage) {
