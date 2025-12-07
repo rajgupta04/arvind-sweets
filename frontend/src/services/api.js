@@ -1,9 +1,8 @@
 // API configuration - Axios setup
 import axios from 'axios';
 
-const apiBase = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/api`
-  : '/api';
+const backendUrl = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL;
+const apiBase = backendUrl ? `${backendUrl}/api` : '/api';
 
 const API = axios.create({
   baseURL: apiBase,

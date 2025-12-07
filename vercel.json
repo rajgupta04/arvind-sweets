@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "frontend/package.json",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "dist" }
+    }
+  ],
+  "env": {
+    "VITE_BACKEND_URL": "https://arvind-sweets.onrender.com",
+    "VITE_API_URL": "https://arvind-sweets.onrender.com"
+  }
+}
