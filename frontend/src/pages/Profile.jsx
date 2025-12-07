@@ -2,10 +2,11 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import Loader from '../components/Loader';
 import { FiUser, FiMail, FiPhone, FiMapPin, FiEdit2, FiSave, FiX, FiPackage, FiLogOut } from 'react-icons/fi';
 
 function Profile() {
-  const { user, updateUser, logout } = useContext(AuthContext);
+  const { user, updateUser, logout, loading: authLoading } = useContext(AuthContext);
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -22,12 +23,12 @@ function Profile() {
   });
 
   useEffect(() => {
+    if (authLoading) return;
     if (!user) {
-      navigate('/login');
+      navigate('/login?redirect=/profile');
       return;
     }
-    
-    // Redirect admin users to admin profile
+
     if (user.role === 'admin') {
       navigate('/admin/profile');
       return;
@@ -44,7 +45,7 @@ function Profile() {
         pincode: user.address?.pincode || ''
       }
     });
-  }, [user, navigate]);
+  }, [user, authLoading, navigate]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -85,6 +86,10 @@ function Profile() {
     logout();
     navigate('/');
   };
+
+  if (authLoading) {
+    return <Loader />;
+  }
 
   if (!user || user.role === 'admin') {
     return null;

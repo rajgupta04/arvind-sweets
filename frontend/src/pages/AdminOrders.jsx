@@ -86,6 +86,30 @@ function AdminOrders() {
                   {order.shippingAddress.name}, {order.shippingAddress.phone}<br />
                   {order.shippingAddress.street}, {order.shippingAddress.city}, {order.shippingAddress.state} - {order.shippingAddress.pincode}
                 </p>
+                {(order.shippingAddress.location || order.distanceKm != null || order.travelTimeMin != null || order.eta) && (
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-50 p-3 rounded">
+                    {order.shippingAddress.location && (
+                      <div>
+                        <p className="text-sm text-gray-700"><span className="font-medium">GPS:</span> {order.shippingAddress.location.lat}, {order.shippingAddress.location.lng}</p>
+                        <a
+                          href={`https://www.google.com/maps?q=${order.shippingAddress.location.lat},${order.shippingAddress.location.lng}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-orange-600 text-sm hover:text-orange-700"
+                        >Open in Google Maps</a>
+                      </div>
+                    )}
+                    {order.distanceKm != null && (
+                      <p className="text-sm text-gray-700"><span className="font-medium">Distance:</span> {order.distanceKm} km</p>
+                    )}
+                    {order.travelTimeMin != null && (
+                      <p className="text-sm text-gray-700"><span className="font-medium">Travel Time:</span> {order.travelTimeMin} min</p>
+                    )}
+                    {order.eta && (
+                      <p className="text-sm text-gray-700"><span className="font-medium">ETA:</span> {new Date(order.eta).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -153,4 +177,3 @@ function AdminOrders() {
 }
 
 export default AdminOrders;
-

@@ -1,6 +1,7 @@
 // Contact/Feedback page component
 import React, { useState } from 'react';
 import { FiMail, FiPhone, FiMapPin, FiSend } from 'react-icons/fi';
+import { createMessage } from '../services/messageService.js';
 
 function Contact() {
   const [formData, setFormData] = useState({
@@ -16,15 +17,22 @@ function Contact() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
+  const [sending, setSending] = useState(false);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // In a real app, you'd send this to your backend
-    console.log('Feedback submitted:', formData);
-    setSubmitted(true);
-    setTimeout(() => {
-      setSubmitted(false);
+    try {
+      setSending(true);
+      await createMessage(formData);
+      setSubmitted(true);
       setFormData({ name: '', email: '', phone: '', subject: '', message: '' });
-    }, 3000);
+      setTimeout(() => setSubmitted(false), 3000);
+    } catch (error) {
+      alert('Failed to send message. Please try again.');
+      console.error('Message send error:', error);
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -40,21 +48,21 @@ function Contact() {
               <FiMapPin className="w-6 h-6 text-orange-600 mt-1" />
               <div>
                 <h3 className="font-semibold">Address</h3>
-                <p className="text-gray-600">123 Sweet Street<br />Sweet City, SC 12345</p>
+                <p className="text-gray-600">Arvind sweets <br />new bus stand Hariharganj palamu jharkhand 822131</p>
               </div>
             </div>
             <div className="flex items-start space-x-4">
               <FiPhone className="w-6 h-6 text-orange-600 mt-1" />
               <div>
                 <h3 className="font-semibold">Phone</h3>
-                <p className="text-gray-600">+91 98765 43210</p>
+                <p className="text-gray-600">+91 8083834895</p>
               </div>
             </div>
             <div className="flex items-start space-x-4">
               <FiMail className="w-6 h-6 text-orange-600 mt-1" />
               <div>
                 <h3 className="font-semibold">Email</h3>
-                <p className="text-gray-600">info@arvindsweets.com</p>
+                <p className="text-gray-600">arvindsweetshariharganj@gmail.com</p>
               </div>
             </div>
           </div>
@@ -160,10 +168,11 @@ function Contact() {
 
             <button
               type="submit"
-              className="w-full bg-orange-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-orange-700 transition flex items-center justify-center space-x-2"
+              className="w-full bg-orange-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-orange-700 transition flex items-center justify-center space-x-2 disabled:opacity-50"
+              disabled={sending}
             >
               <FiSend className="w-5 h-5" />
-              <span>Send Message</span>
+              <span>{sending ? 'Sending...' : 'Send Message'}</span>
             </button>
           </form>
         </div>
@@ -173,4 +182,3 @@ function Contact() {
 }
 
 export default Contact;
-

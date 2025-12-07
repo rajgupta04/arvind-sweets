@@ -3,6 +3,7 @@ import express from 'express';
 import {
   createOrder,
   getOrderById,
+  getLatestOrder,
   getMyOrders,
   getOrders,
   updateOrderToDelivered,
@@ -14,6 +15,7 @@ const router = express.Router();
 
 router.post('/', protect, createOrder);
 router.get('/myorders', protect, getMyOrders);
+router.get('/latest', protect, admin, getLatestOrder);
 router.get('/:id', protect, getOrderById);
 router.get('/', protect, admin, getOrders);
 router.put('/:id/deliver', protect, admin, updateOrderToDelivered);

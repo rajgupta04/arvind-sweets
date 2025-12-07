@@ -1,6 +1,9 @@
 // Order controller - business logic for order routes
 import Order from '../models/Order.js';
-import Product from '../models/Product.js';
+import { notifyOwner } from '../utils/notifyOwner.js';
+import { sendOrderEmail } from '../utils/sendEmail.js';
+// ETA via haversine-based calculation will be computed inline in createOrder
+import Settings from '../models/Settings.js';
 
 // @desc    Create new order
 // @route   POST /api/orders
@@ -14,14 +17,17 @@ export const createOrder = async (req, res) => {
       deliveryType,
       itemsPrice,
       deliveryCharge,
-      totalPrice
+      totalPrice,
+      paymentStatus,
+      userLatitude,
+      userLongitude
     } = req.body;
 
     if (orderItems && orderItems.length === 0) {
       return res.status(400).json({ message: 'No order items' });
     }
 
-    const order = new Order({
+    const orderData = {
       user: req.user._id,
       orderItems,
       shippingAddress,
@@ -29,11 +35,63 @@ export const createOrder = async (req, res) => {
       deliveryType,
       itemsPrice,
       deliveryCharge,
-      totalPrice
-    });
+      totalPrice,
+      paymentStatus: paymentStatus || 'Pending'
+    };
+
+    // Haversine-based ETA calculation
+    try {
+      const SHOP_LAT = Number(process.env.SHOP_LAT);
+      const SHOP_LNG = Number(process.env.SHOP_LNG);
+      const loc = shippingAddress?.location;
+      const uLat = typeof userLatitude === 'number' ? userLatitude : (loc?.lat);
+      const uLng = typeof userLongitude === 'number' ? userLongitude : (loc?.lng);
+
+      if (
+        typeof SHOP_LAT === 'number' && !Number.isNaN(SHOP_LAT) &&
+        typeof SHOP_LNG === 'number' && !Number.isNaN(SHOP_LNG) &&
+        typeof uLat === 'number' && typeof uLng === 'number'
+      ) {
+        const toRad = (v) => (v * Math.PI) / 180;
+        const R = 6371; // Earth radius in km
+        const dLat = toRad(uLat - SHOP_LAT);
+        const dLng = toRad(uLng - SHOP_LNG);
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(SHOP_LAT)) * Math.cos(toRad(uLat)) * Math.sin(dLng / 2) ** 2;
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const distanceKm = Number((R * c).toFixed(2));
+
+        let buffer = 10; // minutes default
+        try {
+          const settings = await Settings.findOne();
+          if (settings && typeof settings.deliveryBuffer === 'number') {
+            buffer = settings.deliveryBuffer;
+          }
+        } catch {}
+        const deliveryTimeMinutes = Math.round(distanceKm * 4 + buffer);
+        const estimatedDelivery = new Date(Date.now() + deliveryTimeMinutes * 60000);
+
+        orderData.distanceKm = distanceKm;
+        orderData.travelTimeMin = deliveryTimeMinutes;
+        orderData.estimatedDelivery = estimatedDelivery;
+        orderData.deliveryBuffer = buffer;
+      }
+    } catch (etaError) {
+      console.warn('ETA calculation failed:', etaError.message);
+    }
+
+    const order = new Order(orderData);
 
     const createdOrder = await order.save();
-    res.status(201).json(createdOrder);
+    const populatedOrder = await createdOrder.populate('user', 'name email');
+
+    notifyOwner(populatedOrder);
+    sendOrderEmail(populatedOrder);
+
+    const responseBody = populatedOrder.toObject({ virtuals: false });
+    if (responseBody.travelTimeMin != null && responseBody.deliveryTimeMinutes == null) {
+      responseBody.deliveryTimeMinutes = responseBody.travelTimeMin;
+    }
+    res.status(201).json(responseBody);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -124,6 +182,21 @@ export const updateOrderStatus = async (req, res) => {
     } else {
       res.status(404).json({ message: 'Order not found' });
     }
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get latest order for admin polling
+// @route   GET /api/orders/latest
+// @access  Private/Admin
+export const getLatestOrder = async (req, res) => {
+  try {
+    const order = await Order.findOne({})
+      .populate('user', 'name email')
+      .sort({ createdAt: -1 });
+
+    res.json(order || null);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

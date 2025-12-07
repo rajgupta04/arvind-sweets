@@ -30,12 +30,21 @@ const orderSchema = new mongoose.Schema({
     street: String,
     city: String,
     state: String,
-    pincode: String
+    pincode: String,
+    location: {
+      lat: Number,
+      lng: Number
+    }
   },
   paymentMethod: {
     type: String,
     enum: ['COD', 'Pickup'],
     required: true
+  },
+  paymentStatus: {
+    type: String,
+    enum: ['Pending', 'Paid', 'Failed'],
+    default: 'Pending'
   },
   deliveryType: {
     type: String,
@@ -56,10 +65,15 @@ const orderSchema = new mongoose.Schema({
     required: true,
     default: 0
   },
+  distanceKm: Number,
+  travelTimeMin: Number,
+  eta: Date,
+  estimatedDelivery: { type: Date },
+  deliveryBuffer: { type: Number, default: 10 },
   orderStatus: {
     type: String,
-    enum: ['Placed', 'Preparing', 'Out for Delivery', 'Delivered', 'Cancelled'],
-    default: 'Placed'
+    enum: ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled', 'Placed', 'Preparing', 'Out for Delivery'],
+    default: 'Pending'
   },
   isPaid: {
     type: Boolean,

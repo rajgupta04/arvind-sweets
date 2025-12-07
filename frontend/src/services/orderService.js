@@ -1,7 +1,7 @@
 // Order service - API calls for orders
 import API from './api.js';
 
-export const createOrder = (orderData) => {
+export const placeOrder = (orderData) => {
   return API.post('/orders', orderData);
 };
 
@@ -9,7 +9,7 @@ export const getMyOrders = () => {
   return API.get('/orders/myorders');
 };
 
-export const getOrderById = (id) => {
+export const getOrderDetails = (id) => {
   return API.get(`/orders/${id}`);
 };
 
@@ -23,5 +23,9 @@ export const updateOrderStatus = (id, status) => {
 
 export const updateOrderToDelivered = (id) => {
   return API.put(`/orders/${id}/deliver`);
+};
+
+export const getLatestOrder = () => {
+  return API.get('/orders/latest');
 };
 

@@ -5,7 +5,7 @@ import { useContext } from 'react';
 import { CartContext } from '../context/CartContext';
 import { AuthContext } from '../context/AuthContext';
 import { FiShoppingCart, FiMenu, FiUser } from 'react-icons/fi';
-import logo from '../components/arvindlogo.png'
+import logo from '../components/arvindlogo.png';
 
 function Navbar() {
   const { getCartItemsCount } = useContext(CartContext);
@@ -41,6 +41,11 @@ function Navbar() {
             <Link to="/" className="text-gray-700 hover:text-orange-600 transition">Home</Link>
             <Link to="/products" className="text-gray-700 hover:text-orange-600 transition">Products</Link>
             <Link to="/contact" className="text-gray-700 hover:text-orange-600 transition">Contact</Link>
+            {user && (
+              <Link to="/orders" className="text-gray-700 hover:text-orange-600 transition">
+                My Orders
+              </Link>
+            )}
 
             <Link to="/cart" className="relative">
               <FiShoppingCart className="w-6 h-6 text-gray-700 hover:text-orange-600" />
@@ -108,13 +113,24 @@ function Navbar() {
             )}
           </div>
 
-          {/* Mobile Menu Button */}
-          <button
-            className="md:hidden text-gray-700"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          >
-            <FiMenu className="w-6 h-6" />
-          </button>
+          {/* Mobile Actions */}
+          <div className="flex items-center space-x-3 md:hidden">
+            <Link to="/cart" className="relative text-gray-700 hover:text-orange-600 transition">
+              <FiShoppingCart className="w-6 h-6" />
+              {getCartItemsCount() > 0 && (
+                <span className="absolute -top-2 -right-2 bg-orange-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  {getCartItemsCount()}
+                </span>
+              )}
+            </Link>
+            <button
+              className="text-gray-700"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="Toggle menu"
+            >
+              <FiMenu className="w-6 h-6" />
+            </button>
+          </div>
         </div>
 
         {/* Mobile Menu */}

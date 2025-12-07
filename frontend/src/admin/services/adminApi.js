@@ -1,4 +1,4 @@
-// Admin API service - Product CRUD operations
+// Admin API service - Product & Order management
 import axios from 'axios';
 
 const API_BASE_URL = '/api';
@@ -56,3 +56,35 @@ export const deleteProduct = async (id) => {
   return response.data;
 };
 
+// ---------------------------
+// Orders
+// ---------------------------
+
+export const getAllOrders = async () => {
+  const response = await api.get('/orders');
+  return response.data;
+};
+
+export const getLatestOrder = async () => {
+  const response = await api.get('/orders/latest');
+  return response.data;
+};
+
+export const updateOrderStatus = async (id, orderStatus) => {
+  const response = await api.put(`/orders/${id}/status`, { orderStatus });
+  return response.data;
+};
+
+// ---------------------------
+// Settings
+// ---------------------------
+
+export const getSettings = async () => {
+  const response = await api.get('/settings/get');
+  return response.data;
+};
+
+export const updateSettings = async (settings) => {
+  const response = await api.put('/settings/update', settings);
+  return response.data;
+};

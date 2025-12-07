@@ -138,11 +138,11 @@ function AdminDashboard() {
                 <p className="text-sm text-gray-600 mt-1">Create a new product listing</p>
               </button>
               <button
-                onClick={() => navigate('/admin/products')}
+                onClick={() => navigate('/admin/orders')}
                 className="p-4 border-2 border-gray-200 rounded-lg hover:border-orange-500 hover:bg-orange-50 transition-colors text-left"
               >
-                <h3 className="font-semibold text-gray-800">Manage Inventory</h3>
-                <p className="text-sm text-gray-600 mt-1">Update stock and availability</p>
+                <h3 className="font-semibold text-gray-800">Manage Orders</h3>
+                <p className="text-sm text-gray-600 mt-1">Track and fulfill customer orders</p>
               </button>
             </div>
           </div>

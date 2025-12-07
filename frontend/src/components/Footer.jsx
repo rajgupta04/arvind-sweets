@@ -9,9 +9,9 @@ function Footer() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
-            <h3 className="text-xl font-bold mb-4">🍰 Arvind Sweets</h3>
+            <h3 className="text-xl font-bold mb-4">Arvind Sweets</h3>
             <p className="text-gray-300 text-sm">
-              Serving delicious sweets since 1990. Your trusted sweet shop for traditional and modern delicacies.
+              Serving delicious sweets and Your trusted sweet shop for traditional and modern delicacies.
             </p>
           </div>
           
@@ -39,23 +39,23 @@ function Footer() {
             <div className="space-y-2 text-sm">
               <div className="flex items-center space-x-2">
                 <FiPhone className="w-4 h-4" />
-                <span className="text-gray-300">+91 98765 43210</span>
+                <span className="text-gray-300">+91 8083834895</span>
               </div>
               <div className="flex items-center space-x-2">
                 <FiMail className="w-4 h-4" />
-                <span className="text-gray-300">info@arvindsweets.com</span>
+                <span className="text-gray-300" >arvindsweetshariharganj@gmail.com</span>
               </div>
             </div>
             <div className="flex space-x-4 mt-4">
               <a href="#" className="text-gray-300 hover:text-white"><FiFacebook className="w-5 h-5" /></a>
               <a href="#" className="text-gray-300 hover:text-white"><FiTwitter className="w-5 h-5" /></a>
-              <a href="#" className="text-gray-300 hover:text-white"><FiInstagram className="w-5 h-5" /></a>
+              <a href="https://www.instagram.com/arvindsweets" className="text-gray-300 hover:text-white"><FiInstagram className="w-5 h-5" /></a>
             </div>
           </div>
         </div>
         
         <div className="border-t border-gray-700 mt-8 pt-8 text-center text-sm text-gray-300">
-          <p>&copy; 2024 Arvind Sweets. All rights reserved.</p>
+          <p>&copy; 2025 Arvind Sweets. All rights reserved.</p>
         </div>
       </div>
     </footer>

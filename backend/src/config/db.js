@@ -1,6 +1,7 @@
 // backend/src/config/db.js
 import mongoose from "mongoose";
-
+import dotenv from "dotenv";
+dotenv.config();
 const connectDB = async () => {
   try {
     console.log("🔗 Connecting to MongoDB using:", process.env.MONGO_URI);
@@ -12,4 +13,4 @@ const connectDB = async () => {
   }
 };
 
-export default connectDB;
+export default connectDB; 

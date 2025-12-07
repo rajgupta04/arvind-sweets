@@ -15,8 +15,11 @@ function AdminSidebar() {
 
   const menuItems = [
     { path: '/admin', label: 'Dashboard', icon: FiHome },
+    { path: '/admin/orders', label: 'Orders', icon: FiPackage },
     { path: '/admin/products', label: 'All Products', icon: FiList },
     { path: '/admin/products/add', label: 'Add Product', icon: FiPlus },
+    { path: '/admin/settings/delivery', label: 'Delivery Settings', icon: FiList },
+    { path: '/admin/messages', label: 'Customer Messages', icon: FiList },
     { path: '/admin/profile', label: 'Profile', icon: FiUser },
   ];
 
@@ -72,4 +75,3 @@ function AdminSidebar() {
 }
 
 export default AdminSidebar;
-
