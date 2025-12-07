@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "keywords": [],
-  "author": "",
+  "author": "rajgupta04",
   "license": "ISC",
   "devDependencies": {
     "@babel/cli": "^7.28.3",

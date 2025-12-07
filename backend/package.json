@@ -10,7 +10,7 @@
     "seed": "node seeder.js"
   },
   "keywords": [],
-  "author": "",
+  "author": "rajgupta04",
   "license": "ISC",
   "dependencies": {
     "bcryptjs": "^2.4.3",
