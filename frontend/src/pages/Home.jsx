@@ -18,9 +18,9 @@ const heroHighlights = [
 ];
 
 const heroStats = [
-  { label: 'Hampers delivered', value: '3.2L+' },
-  { label: 'Corporate clients', value: '3500+' },
-  { label: 'Cities served', value: '120+' },
+  { label: 'Mithai Made Daily', value: '100% Fresh' },
+  { label: 'Happy Local Customers', value: '500+' },
+  { label: 'Within Hariharganj & Nearby Areas', value: 'Fast Delivery' },
 ];
 
 const heroImage =
