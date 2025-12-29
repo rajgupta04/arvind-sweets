@@ -5,6 +5,7 @@ import { CartProvider } from './context/CartContext';
 import { AuthProvider } from './context/AuthContext';
 import PublicLayout from './components/PublicLayout';
 import ProtectedRoute from './components/ProtectedRoute';
+import AdminRoute from './components/AdminRoute';
 
 // Pages
 import Home from './pages/Home';
@@ -19,6 +20,7 @@ import Orders from './pages/Orders';
 import OrderDetails from './pages/OrderDetails';
 import OrderSuccess from './pages/OrderSuccess';
 import OAuthSuccess from './pages/OAuthSuccess';
+import DeliveryTracker from './pages/DeliveryTracker';
 
 // Admin Pages
 import AdminDashboard from './admin/pages/AdminDashboard';
@@ -45,14 +47,17 @@ function App() {
         >
           <Routes>
             {/* Admin Routes - No Navbar/Footer */}
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/admin/products" element={<ProductsList />} />
-            <Route path="/admin/orders" element={<OrdersList />} />
-            <Route path="/admin/messages" element={<AdminMessages />} />
-            <Route path="/admin/products/add" element={<AddProduct />} />
-            <Route path="/admin/products/edit/:id" element={<EditProduct />} />
-            <Route path="/admin/profile" element={<AdminProfile />} />
-            <Route path="/admin/settings/delivery" element={<DeliverySettings />} />
+            <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+            <Route path="/admin/products" element={<AdminRoute><ProductsList /></AdminRoute>} />
+            <Route path="/admin/orders" element={<AdminRoute><OrdersList /></AdminRoute>} />
+            <Route path="/admin/messages" element={<AdminRoute><AdminMessages /></AdminRoute>} />
+            <Route path="/admin/products/add" element={<AdminRoute><AddProduct /></AdminRoute>} />
+            <Route path="/admin/products/edit/:id" element={<AdminRoute><EditProduct /></AdminRoute>} />
+            <Route path="/admin/profile" element={<AdminRoute><AdminProfile /></AdminRoute>} />
+            <Route path="/admin/settings/delivery" element={<AdminRoute><DeliverySettings /></AdminRoute>} />
+
+            {/* Delivery Boy Tracking - No Navbar/Footer */}
+            <Route path="/delivery/track" element={<DeliveryTracker />} />
 
             {/* Public Routes - With Navbar/Footer */}
             <Route element={<PublicLayout />}>

@@ -1,7 +1,9 @@
 // backend/src/server.js
 import dotenv from 'dotenv';
 import path from 'path';
+import http from 'http';
 import connectDB from './config/db.js';
+import { initSocket } from './socket.js';
 
 // ✅ Load .env safely from backend root no matter where command is run
 dotenv.config({ path: path.resolve(process.cwd(), './backend/.env') });
@@ -10,8 +12,7 @@ dotenv.config({ path: path.resolve(process.cwd(), './backend/.env') });
 // Use a dynamic import so app initialization sees env vars.
 const { default: app } = await import('./app.js');
 
-// 🧠 Debugging log
-console.log('MONGO_URI:', process.env.MONGO_URI);
+// Avoid logging sensitive env vars (like MONGO_URI credentials).
 
 if (!process.env.MONGO_URI) {
   console.error('❌ MONGO_URI not found. Check .env file path or dotenv.config()');
@@ -22,7 +23,11 @@ if (!process.env.MONGO_URI) {
 connectDB()
   .then(() => {
     const PORT = process.env.PORT || 5000;
-    app.listen(PORT, () => {
+    const server = http.createServer(app);
+
+    initSocket(server, { app });
+
+    server.listen(PORT, () => {
       console.log(`✅ Server running on port ${PORT}`);
     });
   })

@@ -49,6 +49,53 @@ export const updateOrderStatus = async (id, orderStatus) => {
   return response.data;
 };
 
+export const assignDeliveryBoyToOrder = async (orderId, { deliveryBoyId, liveTrackingEnabled } = {}) => {
+  const body = {
+    deliveryBoyId: deliveryBoyId || null,
+  };
+  if (typeof liveTrackingEnabled === 'boolean') {
+    body.liveTrackingEnabled = liveTrackingEnabled;
+  }
+
+  const response = await API.put(`/orders/${orderId}/assign-delivery`, body);
+  return response.data;
+};
+
+export const setOrderTrackingEnabled = async (orderId, enabled) => {
+  const response = await API.put(`/orders/${orderId}/tracking`, {
+    enabled: Boolean(enabled),
+  });
+  return response.data;
+};
+
+export const generateDeliveryTrackingLink = async (orderId, { deliveryBoyId } = {}) => {
+  const response = await API.post(`/orders/${orderId}/tracking-link`, {
+    deliveryBoyId: deliveryBoyId || null,
+  });
+  return response.data;
+};
+
+// ---------------------------
+// Delivery Boys
+// ---------------------------
+
+export const listDeliveryBoys = async ({ isActive } = {}) => {
+  const response = await API.get('/delivery-boys', {
+    params: typeof isActive === 'boolean' ? { isActive: String(isActive) } : undefined,
+  });
+  return response.data;
+};
+
+export const createDeliveryBoy = async ({ name, phone, isActive } = {}) => {
+  const response = await API.post('/delivery-boys', { name, phone, isActive });
+  return response.data;
+};
+
+export const updateDeliveryBoy = async (id, updates) => {
+  const response = await API.put(`/delivery-boys/${id}`, updates);
+  return response.data;
+};
+
 // ---------------------------
 // Settings
 // ---------------------------

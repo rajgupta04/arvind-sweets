@@ -107,6 +107,14 @@ If you prefer signed uploads (requires backend):
 
 **Current implementation uses unsigned uploads** (simpler, but preset must be configured correctly).
 
+### Recommended (Production-grade): Signed backend uploads
+
+This project now supports **signed uploads via the backend** so transformations are enforced even if an unsigned preset ignores incoming parameters.
+
+- Backend endpoint: `POST /api/uploads/products/image` (admin auth)
+- Frontend behavior: admin uploads **try backend first**, then fall back to unsigned preset upload.
+- Optional toggle: set `VITE_USE_BACKEND_UPLOAD=false` to force unsigned uploads only.
+
 ---
 
 ## 🗄️ MongoDB Setup

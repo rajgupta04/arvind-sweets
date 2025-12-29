@@ -5,6 +5,7 @@ import { getProducts } from '../services/productService';
 import ProductCard from '../components/ProductCard';
 import Loader from '../components/Loader';
 import { FiArrowRight } from 'react-icons/fi';
+import { getOptimizedImageUrl } from '../lib/cloudinary.js';
 
 const heroHighlights = [
   {
@@ -120,7 +121,7 @@ function Home() {
             <div className="rounded-[32px] bg-white shadow-2xl p-6 lg:p-8">
               <div className="aspect-[4/5] rounded-3xl overflow-hidden relative">
                 <img
-                  src={heroImage}
+                  src={getOptimizedImageUrl(heroImage)}
                   alt="Premium mithai hampers"
                   className="w-full h-full object-cover"
                   loading="lazy"

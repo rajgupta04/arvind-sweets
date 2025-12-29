@@ -2,6 +2,7 @@ import { cn } from '../../lib/utils';
 import Autoplay from 'embla-carousel-autoplay';
 import useEmblaCarousel from 'embla-carousel-react';
 import { useEffect, useState } from 'react';
+import { getOptimizedImageUrl } from '../../lib/cloudinary.js';
 export default function Carousel({
   images
 }) {
@@ -23,7 +24,7 @@ export default function Carousel({
          <div className="overflow-hidden rounded-lg" ref={emblaRef}>
             <div className="flex">
                {images.map((src, i) => <div className="relative h-96 flex-[0_0_100%]" key={i}>
-                     <img src={src} className="object-cover" alt="" />
+                   <img src={getOptimizedImageUrl(src)} className="object-cover" alt="" />
                   </div>)}
             </div>
          </div>

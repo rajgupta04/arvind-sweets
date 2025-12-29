@@ -6,6 +6,7 @@ import { useContext } from 'react';
 import { CartContext } from '../context/CartContext';
 import Loader from '../components/Loader';
 import { FiShoppingCart, FiArrowLeft } from 'react-icons/fi';
+import { getAdminThumbUrl, getOptimizedImageUrl } from '../lib/cloudinary.js';
 
 function ProductDetail() {
   const { id } = useParams();
@@ -87,7 +88,7 @@ function ProductDetail() {
           <div className="bg-white rounded-lg shadow-md p-4 mb-4">
             {product.images && product.images.length > 0 ? (
               <img
-                src={product.images[selectedImage]}
+                src={getOptimizedImageUrl(product.images[selectedImage])}
                 alt={product.name}
                 className="w-full h-96 object-cover rounded-lg"
               />
@@ -107,7 +108,7 @@ function ProductDetail() {
                     selectedImage === index ? 'border-orange-600' : 'border-gray-300'
                   }`}
                 >
-                  <img src={image} alt={`${product.name} ${index + 1}`} className="w-20 h-20 object-cover" />
+                  <img src={getAdminThumbUrl(image)} alt={`${product.name} ${index + 1}`} className="w-20 h-20 object-cover" />
                 </button>
               ))}
             </div>

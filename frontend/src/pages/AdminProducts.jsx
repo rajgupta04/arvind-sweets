@@ -5,6 +5,7 @@ import { AuthContext } from '../context/AuthContext';
 import { getProducts, createProduct, updateProduct, deleteProduct } from '../services/productService';
 import Loader from '../components/Loader';
 import { FiEdit, FiTrash2, FiPlus } from 'react-icons/fi';
+import { getAdminThumbUrl } from '../lib/cloudinary.js';
 
 function AdminProducts() {
   const { user } = useContext(AuthContext);
@@ -157,7 +158,7 @@ function AdminProducts() {
               <tr key={product._id}>
                 <td className="px-6 py-4 whitespace-nowrap">
                   {product.images && product.images.length > 0 ? (
-                    <img src={product.images[0]} alt={product.name} className="w-16 h-16 object-cover rounded" />
+                    <img src={getAdminThumbUrl(product.images[0])} alt={product.name} className="w-16 h-16 object-cover rounded" />
                   ) : (
                     <div className="w-16 h-16 bg-gray-200 rounded flex items-center justify-center">
                       <span className="text-2xl">🍰</span>

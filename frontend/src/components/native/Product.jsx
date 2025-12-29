@@ -2,6 +2,7 @@ import { ImageSkeleton } from './icons';
 import { Badge } from '../ui/badge';
 import { Card, CardContent, CardFooter, CardHeader } from '../ui/card';
 import { Link } from 'react-router-dom';
+import { getProductCardThumbUrl } from '../../lib/cloudinary.js';
 export const ProductGrid = ({
   products
 }) => {
@@ -35,7 +36,7 @@ export const Product = ({
          <Card className="h-full">
             <CardHeader className="p-0">
                <div className="relative h-60 w-full">
-                  <img className="rounded-t-lg" src={product?.images[0]} alt="product image" sizes="(min-width: 1000px) 30vw, 50vw" style={{
+                  <img className="rounded-t-lg" src={getProductCardThumbUrl(product?.images?.[0])} alt="product image" sizes="(min-width: 1000px) 30vw, 50vw" style={{
             objectFit: 'cover'
           }} />
                </div>

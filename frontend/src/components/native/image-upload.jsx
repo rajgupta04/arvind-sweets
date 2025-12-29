@@ -2,6 +2,7 @@ import { Button } from '../ui/button';
 import { ImagePlus, Trash } from 'lucide-react';
 import { CldUploadWidget } from 'next-cloudinary';
 import { useEffect, useState } from 'react';
+import { getOptimizedImageUrl } from '../../lib/cloudinary.js';
 const ImageUpload = ({
   disabled,
   onChange,
@@ -26,7 +27,7 @@ const ImageUpload = ({
                         <Trash className="h-4" />
                      </Button>
                   </div>
-                  <img sizes="(min-width: 1000px) 30vw, 50vw" className="object-cover" alt="Image" src={url} />
+                <img sizes="(min-width: 1000px) 30vw, 50vw" className="object-cover" alt="Image" src={getOptimizedImageUrl(url)} />
                </div>)}
          </div>
          <CldUploadWidget onUpload={onUpload} uploadPreset="t4drjppf">

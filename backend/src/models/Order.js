@@ -75,6 +75,28 @@ const orderSchema = new mongoose.Schema({
     enum: ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled', 'Placed', 'Preparing', 'Out for Delivery'],
     default: 'Pending'
   },
+  assignedDeliveryBoy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'DeliveryBoy',
+    default: null
+  },
+  liveTrackingEnabled: {
+    type: Boolean,
+    default: false
+  },
+  trackingEnabledAt: {
+    type: Date,
+    default: null
+  },
+  trackingPausedAt: {
+    type: Date,
+    default: null
+  },
+  lastDeliveryLocation: {
+    lat: Number,
+    lng: Number,
+    updatedAt: Date
+  },
   isPaid: {
     type: Boolean,
     default: false

@@ -1,5 +1,6 @@
 // Admin Navbar Component
 import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FiMenu, FiBell, FiUser } from 'react-icons/fi';
 import { getLatestOrder } from '../services/adminApi';
 
@@ -7,6 +8,7 @@ const formatAmount = (value = 0) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value);
 
 function AdminNavbar({ onMenuClick }) {
+  const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const [recentOrders, setRecentOrders] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -16,8 +18,36 @@ function AdminNavbar({ onMenuClick }) {
   useEffect(() => {
     let intervalId;
 
+    const handleAuthFailure = () => {
+      try {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      } catch {}
+      try {
+        clearInterval(intervalId);
+      } catch {}
+      navigate('/login');
+    };
+
     const checkLatestOrder = async (initial = false) => {
       try {
+        const token = (() => {
+          try {
+            return localStorage.getItem('token');
+          } catch {
+            return null;
+          }
+        })();
+
+        // If there's no token, do not poll protected admin endpoints.
+        if (!token) {
+          if (initial) {
+            setRecentOrders([]);
+            setUnreadCount(0);
+          }
+          return;
+        }
+
         const latest = await getLatestOrder();
         if (!latest) return;
 
@@ -38,6 +68,11 @@ function AdminNavbar({ onMenuClick }) {
           setRecentOrders((prev) => (prev.length ? prev : [latest]));
         }
       } catch (error) {
+        const status = error?.response?.status;
+        if (status === 401 || status === 403) {
+          handleAuthFailure();
+          return;
+        }
         console.error('Failed to fetch latest order', error);
       }
     };
@@ -46,7 +81,7 @@ function AdminNavbar({ onMenuClick }) {
     intervalId = setInterval(() => checkLatestOrder(false), 10000);
 
     return () => clearInterval(intervalId);
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {

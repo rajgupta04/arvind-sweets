@@ -1,5 +1,6 @@
 import { VerifiedAccount } from '../icons';
 import { format } from 'date-fns';
+import { getOptimizedImageUrl } from '../../../lib/cloudinary.js';
 /**
  * Supports plain text, images, quote tweets.
  *
@@ -26,7 +27,7 @@ export default function Tweet({
   return <div className="tweet my-4 w-full rounded-lg border border-neutral-200 bg-white px-6 py-4 dark:border-neutral-800 dark:bg-neutral-900">
          <div className="flex items-center">
             <a className="flex h-12 w-12" href={authorUrl} target="_blank" rel="noreferrer">
-               <img alt={author.username} height={48} width={48} src={author.profile_image_url} className="rounded-full" />
+               <img alt={author.username} height={48} width={48} src={getOptimizedImageUrl(author.profile_image_url)} className="rounded-full" />
             </a>
             <a href={authorUrl} target="_blank" rel="noreferrer" className="author ml-4 flex flex-col !no-underline">
                <span className="flex items-center font-bold leading-5 !text-neutral-900 dark:!text-neutral-100" title={author.name}>
@@ -49,7 +50,7 @@ export default function Tweet({
             {formattedText}
          </div>
          {media && media.length ? <div className={media.length === 1 ? 'my-2 inline-grid grid-cols-1 gap-x-2 gap-y-2' : 'my-2 inline-grid grid-cols-2 gap-x-2 gap-y-2'}>
-               {media.map(m => <img key={m.media_key} alt={text} height={m.height} width={m.width} src={m.url} className="rounded" />)}
+               {media.map(m => <img key={m.media_key} alt={text} height={m.height} width={m.width} src={getOptimizedImageUrl(m.url)} className="rounded" />)}
             </div> : null}
          {quoteTweet ? <Tweet {...quoteTweet} /> : null}
          <a className="text-sm !text-neutral-500 hover:!underline" href={tweetUrl} target="_blank" rel="noreferrer">

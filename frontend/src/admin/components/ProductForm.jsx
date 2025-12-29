@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { uploadToCloudinary } from '../services/cloudinaryUpload';
 import { FiX, FiUpload, FiImage } from 'react-icons/fi';
+import { getOptimizedImageUrl } from '../../lib/cloudinary.js';
 
 function ProductForm({ initialData = null, onSubmit, onCancel, isLoading = false }) {
   const [formData, setFormData] = useState({
@@ -242,7 +243,7 @@ function ProductForm({ initialData = null, onSubmit, onCancel, isLoading = false
               {formData.images.map((imageUrl, index) => (
                 <div key={index} className="relative group">
                   <img
-                    src={imageUrl}
+                    src={getOptimizedImageUrl(imageUrl)}
                     alt={`Preview ${index + 1}`}
                     className="w-full h-32 object-cover rounded-lg border border-gray-300"
                   />

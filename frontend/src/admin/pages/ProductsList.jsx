@@ -6,6 +6,7 @@ import AdminSidebar from '../components/AdminSidebar';
 import AdminNavbar from '../components/AdminNavbar';
 import { getAllProducts, deleteProduct } from '../services/adminApi';
 import { FiEdit, FiTrash2, FiPlus, FiImage, FiPackage } from 'react-icons/fi';
+import { getAdminThumbUrl } from '../../lib/cloudinary.js';
 
 function ProductsList() {
   const { user } = useContext(AuthContext);
@@ -141,7 +142,7 @@ function ProductsList() {
                         <td className="px-6 py-4 whitespace-nowrap">
                           {product.images && product.images.length > 0 ? (
                             <img
-                              src={product.images[0]}
+                                  src={getAdminThumbUrl(product.images[0])}
                               alt={product.name}
                               className="w-16 h-16 object-cover rounded-lg"
                             />

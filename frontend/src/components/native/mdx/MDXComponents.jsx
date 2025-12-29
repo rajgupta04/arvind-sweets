@@ -1,12 +1,13 @@
 import ConsCard from './ConsCard';
 import ProsCard from './ProsCard';
 import Step from './Step';
+import { getOptimizedImageUrl } from '../../../lib/cloudinary.js';
 function MDXImage({
   alt,
   src
 }) {
   return <div className="my-6 w-full">
-         <img alt={alt} className="mx-auto rounded-lg" src={src} sizes="(min-width: 1000px) 30vw, 50vw" />
+         <img alt={alt} className="mx-auto rounded-lg" src={getOptimizedImageUrl(src)} sizes="(min-width: 1000px) 30vw, 50vw" />
       </div>;
 }
 function Callout(props) {

@@ -15,6 +15,14 @@ Backend API for Arvind Sweets application.
    JWT_SECRET=your-secret-key-here-change-this-in-production
    PORT=5000
 
+   # Cloudinary (recommended: use backend signed uploads so transformations are enforced)
+   CLOUDINARY_CLOUD_NAME=your_cloud_name
+   CLOUDINARY_API_KEY=your_api_key
+   CLOUDINARY_API_SECRET=your_api_secret
+
+   # Optional: log original vs delivered optimized bytes on upload
+   LOG_CLOUDINARY_SIZE_DIFF=false
+
    # Google OAuth (optional)
    GOOGLE_CLIENT_ID=xxxxxxxxxxxx.apps.googleusercontent.com
    GOOGLE_CLIENT_SECRET=xxxxxxxxxxxx
@@ -40,6 +48,15 @@ Backend API for Arvind Sweets application.
 
 - **MongoDB Connection**: The server will start even if MongoDB is not connected, but database operations will fail. For development, sample product data will be returned when DB is not connected.
 - **Admin Users**: To create an admin user, manually set `role: 'admin'` in the database for a user account.
+
+## Image Uploads (Cloudinary)
+
+This backend exposes a signed upload endpoint that enforces optimization at upload-time and provides optimized delivery URLs:
+
+- `POST /api/uploads/products/image` (auth: admin)
+   - Form field: `image` (multipart/form-data)
+   - Applies: folder upload, `quality:auto`, `fetch_format:auto`, lossy flags, and max-width limit (1200px)
+   - Returns `optimizedUrl` plus thumbnail URLs (`thumbs.card300`, `thumbs.admin100`)
 
 ## Troubleshooting
 

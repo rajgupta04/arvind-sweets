@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import Loader from '../components/Loader';
 import { getOrderDetails } from '../services/orderService';
+import { getAdminThumbUrl } from '../lib/cloudinary.js';
 
 function OrderSuccess() {
   const { id } = useParams();
@@ -140,7 +141,7 @@ function OrderSuccess() {
               <div key={item.product || item._id} className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   {item.image && (
-                    <img src={item.image} alt={item.name} className="w-14 h-14 rounded-xl object-cover border" />
+                    <img src={getAdminThumbUrl(item.image)} alt={item.name} className="w-14 h-14 rounded-xl object-cover border" />
                   )}
                   <div>
                     <p className="font-semibold text-gray-900">{item.name}</p>

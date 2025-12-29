@@ -1,9 +1,28 @@
 // Order controller - business logic for order routes
 import Order from '../models/Order.js';
+import DeliveryBoy from '../models/DeliveryBoy.js';
+import jwt from 'jsonwebtoken';
 import { notifyOwner } from '../utils/notifyOwner.js';
 import { sendOrderEmail } from '../utils/sendEmail.js';
 // ETA via haversine-based calculation will be computed inline in createOrder
 import Settings from '../models/Settings.js';
+import { trackingStore } from '../utils/trackingStore.js';
+
+function getFrontendBaseUrl() {
+  const single = process.env.FRONTEND_URL;
+  if (single) return String(single).trim().replace(/\/$/, '');
+
+  const list = process.env.FRONTEND_URLS;
+  if (list) {
+    const first = String(list)
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)[0];
+    if (first) return first.replace(/\/$/, '');
+  }
+
+  return 'http://localhost:5173';
+}
 
 // @desc    Create new order
 // @route   POST /api/orders
@@ -102,7 +121,9 @@ export const createOrder = async (req, res) => {
 // @access  Private
 export const getOrderById = async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id).populate('user', 'name email');
+    const order = await Order.findById(req.params.id)
+      .populate('user', 'name email')
+      .populate('assignedDeliveryBoy');
 
     if (order) {
       if (order.user._id.toString() === req.user._id.toString() || req.user.role === 'admin') {
@@ -123,7 +144,9 @@ export const getOrderById = async (req, res) => {
 // @access  Private
 export const getMyOrders = async (req, res) => {
   try {
-    const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 });
+    const orders = await Order.find({ user: req.user._id })
+      .populate('assignedDeliveryBoy')
+      .sort({ createdAt: -1 });
     res.json(orders);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -135,7 +158,10 @@ export const getMyOrders = async (req, res) => {
 // @access  Private/Admin
 export const getOrders = async (req, res) => {
   try {
-    const orders = await Order.find({}).populate('user', 'name email').sort({ createdAt: -1 });
+    const orders = await Order.find({})
+      .populate('user', 'name email')
+      .populate('assignedDeliveryBoy')
+      .sort({ createdAt: -1 });
     res.json(orders);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -152,8 +178,20 @@ export const updateOrderToDelivered = async (req, res) => {
     if (order) {
       order.orderStatus = 'Delivered';
       order.deliveredAt = Date.now();
+      order.liveTrackingEnabled = false;
 
       const updatedOrder = await order.save();
+
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`order_${order._id}`).emit('orderStatusUpdated', {
+          orderId: String(order._id),
+          orderStatus: 'Delivered',
+        });
+        io.to(`order_${order._id}`).emit('trackingStopped', {
+          orderId: String(order._id),
+        });
+      }
       res.json(updatedOrder);
     } else {
       res.status(404).json({ message: 'Order not found' });
@@ -175,9 +213,23 @@ export const updateOrderStatus = async (req, res) => {
       order.orderStatus = orderStatus;
       if (orderStatus === 'Delivered') {
         order.deliveredAt = Date.now();
+        order.liveTrackingEnabled = false;
       }
 
       const updatedOrder = await order.save();
+
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`order_${order._id}`).emit('orderStatusUpdated', {
+          orderId: String(order._id),
+          orderStatus,
+        });
+        if (orderStatus === 'Delivered') {
+          io.to(`order_${order._id}`).emit('trackingStopped', {
+            orderId: String(order._id),
+          });
+        }
+      }
       res.json(updatedOrder);
     } else {
       res.status(404).json({ message: 'Order not found' });
@@ -197,6 +249,207 @@ export const getLatestOrder = async (req, res) => {
       .sort({ createdAt: -1 });
 
     res.json(order || null);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Assign delivery boy to an order and toggle live tracking
+// @route   PUT /api/orders/:id/assign-delivery
+// @access  Private/Admin
+export const assignDeliveryBoyToOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { deliveryBoyId, liveTrackingEnabled } = req.body;
+
+    const order = await Order.findById(id);
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+
+    if (deliveryBoyId) {
+      const deliveryBoy = await DeliveryBoy.findById(deliveryBoyId);
+      if (!deliveryBoy) return res.status(400).json({ message: 'Invalid deliveryBoyId' });
+      order.assignedDeliveryBoy = deliveryBoy._id;
+    } else {
+      order.assignedDeliveryBoy = null;
+    }
+
+    if (typeof liveTrackingEnabled === 'boolean') {
+      if (liveTrackingEnabled === true && !order.assignedDeliveryBoy) {
+        return res.status(400).json({ message: 'Assign a delivery boy before enabling tracking' });
+      }
+
+      order.liveTrackingEnabled = liveTrackingEnabled;
+      if (liveTrackingEnabled) {
+        order.trackingEnabledAt = order.trackingEnabledAt || new Date();
+        order.trackingPausedAt = null;
+      } else {
+        order.trackingPausedAt = new Date();
+      }
+    }
+
+    // If unassigned, tracking must be off.
+    if (!order.assignedDeliveryBoy) {
+      order.liveTrackingEnabled = false;
+      order.trackingPausedAt = order.trackingPausedAt || new Date();
+    }
+
+    const updated = await order.save();
+    const populated = await updated.populate('user', 'name email');
+    await populated.populate('assignedDeliveryBoy');
+
+    const io = req.app.get('io');
+    if (io) {
+      const roomLegacy = `order_${order._id}`;
+      const roomSpec = `order:${order._id}`;
+
+      io.to(roomLegacy).emit('orderAssignmentUpdated', {
+        orderId: String(order._id),
+        assignedDeliveryBoy: populated.assignedDeliveryBoy,
+        liveTrackingEnabled: populated.liveTrackingEnabled,
+      });
+
+      io.to(roomSpec).emit('orderAssignmentUpdated', {
+        orderId: String(order._id),
+        assignedDeliveryBoy: populated.assignedDeliveryBoy,
+        liveTrackingEnabled: populated.liveTrackingEnabled,
+      });
+
+      // Backward-compatible stop signal for clients
+      if (!populated.liveTrackingEnabled) {
+        io.to(roomLegacy).emit('trackingStopped', { orderId: String(order._id) });
+        io.to(roomSpec).emit('trackingStopped', { orderId: String(order._id) });
+      }
+    }
+
+    res.json(populated);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Pause/Resume live tracking (without changing assignment)
+// @route   PUT /api/orders/:id/tracking
+// @access  Private/Admin
+export const setOrderTrackingEnabled = async (req, res) => {
+  try {
+    const { enabled } = req.body || {};
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ message: 'enabled must be boolean' });
+    }
+
+    const order = await Order.findById(req.params.id).populate('user', 'name email').populate('assignedDeliveryBoy');
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+
+    if (enabled === true && !order.assignedDeliveryBoy) {
+      return res.status(400).json({ message: 'Assign a delivery boy before enabling tracking' });
+    }
+
+    order.liveTrackingEnabled = enabled;
+    if (enabled) {
+      order.trackingEnabledAt = order.trackingEnabledAt || new Date();
+      order.trackingPausedAt = null;
+    } else {
+      order.trackingPausedAt = new Date();
+    }
+
+    const updated = await order.save();
+
+    const io = req.app.get('io');
+    if (io) {
+      const roomLegacy = `order_${updated._id}`;
+      const roomSpec = `order:${updated._id}`;
+
+      io.to(roomLegacy).emit('orderAssignmentUpdated', {
+        orderId: String(updated._id),
+        assignedDeliveryBoy: updated.assignedDeliveryBoy,
+        liveTrackingEnabled: updated.liveTrackingEnabled,
+      });
+
+      io.to(roomSpec).emit('orderAssignmentUpdated', {
+        orderId: String(updated._id),
+        assignedDeliveryBoy: updated.assignedDeliveryBoy,
+        liveTrackingEnabled: updated.liveTrackingEnabled,
+      });
+
+      if (!updated.liveTrackingEnabled) {
+        io.to(roomLegacy).emit('trackingStopped', { orderId: String(updated._id) });
+        io.to(roomSpec).emit('trackingStopped', { orderId: String(updated._id) });
+      }
+    }
+
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Generate delivery tracking link (short-lived token)
+// @route   POST /api/orders/:id/tracking-link
+// @access  Private/Admin
+export const generateDeliveryTrackingLink = async (req, res) => {
+  try {
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({ message: 'JWT_SECRET is not configured' });
+    }
+
+    const { id } = req.params;
+    const { deliveryBoyId } = req.body || {};
+
+    const order = await Order.findById(id);
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+
+    const assigned = order.assignedDeliveryBoy ? String(order.assignedDeliveryBoy) : null;
+    const chosen = deliveryBoyId ? String(deliveryBoyId) : assigned;
+
+    if (!chosen) {
+      return res.status(400).json({ message: 'No delivery boy assigned to this order' });
+    }
+
+    if (assigned && chosen !== assigned) {
+      return res.status(400).json({ message: 'deliveryBoyId does not match assigned delivery boy for this order' });
+    }
+
+    const deliveryBoy = await DeliveryBoy.findById(chosen);
+    if (!deliveryBoy) return res.status(400).json({ message: 'Invalid deliveryBoyId' });
+
+    const token = jwt.sign(
+      {
+        type: 'delivery_tracking',
+        orderId: String(order._id),
+        deliveryBoyId: String(deliveryBoy._id),
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '6h' }
+    );
+
+    const frontendBase = getFrontendBaseUrl();
+    const url = `${frontendBase}/delivery/track?orderId=${encodeURIComponent(String(order._id))}&deliveryBoyId=${encodeURIComponent(
+      String(deliveryBoy._id)
+    )}&token=${encodeURIComponent(token)}`;
+
+    res.json({ token, url, expiresInHours: 6 });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get last known delivery location (in-memory store)
+// @route   GET /api/orders/:id/tracking
+// @access  Private (Order owner or Admin)
+export const getOrderTracking = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id).select('user assignedDeliveryBoy liveTrackingEnabled orderStatus');
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+
+    const isAdmin = req.user?.role === 'admin';
+    const isOwner = req.user?._id && String(order.user) === String(req.user._id);
+
+    if (!isAdmin && !isOwner) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    const last = await trackingStore.get(String(order._id));
+    res.json({ orderId: String(order._id), lastKnownLocation: last });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

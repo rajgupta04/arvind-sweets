@@ -1,6 +1,7 @@
 import { ImageSkeleton } from './icons';
 import { Card, CardContent, CardFooter, CardHeader } from '../ui/card';
 import { Link } from 'react-router-dom';
+import { getProductCardThumbUrl } from '../../lib/cloudinary.js';
 export function BlogPostGrid({
   blogs
 }) {
@@ -28,7 +29,7 @@ export function BlogPostCard({
          <Card className="h-full">
             <CardHeader className="p-0">
                <div className="relative h-60 w-full">
-                  <img className="rounded-t-lg" src={image} alt="product image" sizes="(min-width: 1000px) 30vw, 50vw" style={{
+                  <img className="rounded-t-lg" src={getProductCardThumbUrl(image)} alt="product image" sizes="(min-width: 1000px) 30vw, 50vw" style={{
             objectFit: 'cover'
           }} />
                </div>

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useContext } from 'react';
 import { CartContext } from '../context/CartContext';
 import { FiShoppingCart } from 'react-icons/fi';
+import { getProductCardThumbUrl } from '../lib/cloudinary.js';
 
 function ProductCard({ product }) {
   const { addToCart } = useContext(CartContext);
@@ -94,7 +95,7 @@ function ProductCard({ product }) {
         >
           {images.length > 0 ? (
             <img
-              src={images[hoverIndex] ?? images[0]}
+              src={getProductCardThumbUrl(images[hoverIndex] ?? images[0])}
               alt={product.name}
               className="w-full h-full object-cover transition-all duration-300"
             />

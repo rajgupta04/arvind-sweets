@@ -3,8 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
 import AdminSidebar from '../components/AdminSidebar';
 import AdminNavbar from '../components/AdminNavbar';
-import { getAllOrders, updateOrderStatus } from '../services/adminApi';
+import {
+  assignDeliveryBoyToOrder,
+  createDeliveryBoy,
+  getAllOrders,
+  generateDeliveryTrackingLink,
+  listDeliveryBoys,
+  setOrderTrackingEnabled,
+  updateOrderStatus,
+} from '../services/adminApi';
 import { FiEye, FiX } from 'react-icons/fi';
+import { createSocket } from '../../services/socket';
 
 const statusOptions = ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled', 'Placed', 'Preparing', 'Out for Delivery'];
 
@@ -20,9 +29,23 @@ function OrdersList() {
   const [showModal, setShowModal] = useState(false);
   const [updatingStatusId, setUpdatingStatusId] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
+  const [deliveryBoys, setDeliveryBoys] = useState([]);
+  const [deliveryBoysLoading, setDeliveryBoysLoading] = useState(false);
+  const [assigningDelivery, setAssigningDelivery] = useState(false);
+  const [selectedDeliveryBoyId, setSelectedDeliveryBoyId] = useState('');
+  const [liveTrackingEnabled, setLiveTrackingEnabled] = useState(false);
+  const [newDeliveryBoyName, setNewDeliveryBoyName] = useState('');
+  const [newDeliveryBoyPhone, setNewDeliveryBoyPhone] = useState('');
+  const [creatingDeliveryBoy, setCreatingDeliveryBoy] = useState(false);
+  const [liveLocation, setLiveLocation] = useState(null);
+  const [trackingActive, setTrackingActive] = useState(false);
+  const [trackingMessage, setTrackingMessage] = useState('');
+  const [copyingLink, setCopyingLink] = useState(false);
+  const [togglingTracking, setTogglingTracking] = useState(false);
   const audioRef = useRef(null);
   const lastOrderIdRef = useRef(null);
   const initializedRef = useRef(false);
+  const socketRef = useRef(null);
 
   useEffect(() => {
     if (!user || user.role !== 'admin') {
@@ -82,6 +105,19 @@ function OrdersList() {
     }
 
     try {
+      const token = (() => {
+        try {
+          return localStorage.getItem('token');
+        } catch {
+          return null;
+        }
+      })();
+
+      if (!token) {
+        setOrders([]);
+        return;
+      }
+
       const data = await getAllOrders();
       setOrders(data);
 
@@ -96,6 +132,15 @@ function OrdersList() {
         }
       }
     } catch (error) {
+      const status = error?.response?.status;
+      if (status === 401 || status === 403) {
+        try {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+        } catch {}
+        navigate('/login');
+        return;
+      }
       console.error('Failed to load orders', error);
     } finally {
       setLoading(false);
@@ -106,6 +151,22 @@ function OrdersList() {
     fetchOrders();
     const interval = setInterval(() => fetchOrders(true), 10000);
     return () => clearInterval(interval);
+  }, []);
+
+  const fetchDeliveryBoys = async () => {
+    setDeliveryBoysLoading(true);
+    try {
+      const data = await listDeliveryBoys();
+      setDeliveryBoys(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Failed to load delivery boys', error);
+    } finally {
+      setDeliveryBoysLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDeliveryBoys();
   }, []);
 
   useEffect(() => {
@@ -137,12 +198,227 @@ function OrdersList() {
 
   const openModal = (order) => {
     setSelectedOrder(order);
+    const assignedId = order?.assignedDeliveryBoy?._id || '';
+    setSelectedDeliveryBoyId(assignedId);
+    setLiveTrackingEnabled(Boolean(order?.liveTrackingEnabled));
+    setLiveLocation(
+      order?.lastDeliveryLocation?.lat
+        ? {
+            lat: order.lastDeliveryLocation.lat,
+            lng: order.lastDeliveryLocation.lng,
+            updatedAt: order.lastDeliveryLocation.updatedAt,
+          }
+        : null
+    );
+    setTrackingActive(false);
+    setTrackingMessage('');
     setShowModal(true);
   };
 
   const closeModal = () => {
     setSelectedOrder(null);
     setShowModal(false);
+    setLiveLocation(null);
+    setTrackingActive(false);
+    setTrackingMessage('');
+    try {
+      socketRef.current?.disconnect();
+    } catch {}
+    socketRef.current = null;
+  };
+
+  useEffect(() => {
+    if (!showModal || !selectedOrder?._id) return;
+
+    const canTrack =
+      selectedOrder.orderStatus === 'Out for Delivery' &&
+      selectedOrder.liveTrackingEnabled === true;
+
+    if (!canTrack) {
+      setTrackingActive(false);
+      setTrackingMessage('');
+      try {
+        socketRef.current?.disconnect();
+      } catch {}
+      socketRef.current = null;
+      return;
+    }
+
+    const socket = createSocket();
+    socketRef.current = socket;
+
+    const join = () => {
+      socket.emit('joinOrder', { orderId: selectedOrder._id }, (ack) => {
+        if (ack?.ok) {
+          setTrackingActive(true);
+          setTrackingMessage('Live tracking is active');
+        } else {
+          setTrackingActive(false);
+          setTrackingMessage('Unable to join live tracking');
+        }
+      });
+    };
+
+    socket.on('connect', join);
+    socket.on('orderLocationUpdate', (payload) => {
+      if (!payload?.orderId || payload.orderId !== selectedOrder._id) return;
+      const loc = payload.location;
+      if (loc && typeof loc.lat === 'number' && typeof loc.lng === 'number') {
+        setLiveLocation({
+          lat: loc.lat,
+          lng: loc.lng,
+          updatedAt: loc.updatedAt,
+        });
+      }
+    });
+
+    socket.on('trackingStopped', (payload) => {
+      if (!payload?.orderId || payload.orderId !== String(selectedOrder._id)) return;
+      setTrackingActive(false);
+      setTrackingMessage('Tracking stopped');
+    });
+
+    socket.on('orderStatusUpdated', (payload) => {
+      if (!payload?.orderId || payload.orderId !== String(selectedOrder._id)) return;
+      if (payload.orderStatus === 'Delivered') {
+        setTrackingActive(false);
+        setTrackingMessage('Order delivered');
+      }
+    });
+
+    if (socket.connected) join();
+
+    return () => {
+      try {
+        socket.emit('leaveOrder', { orderId: selectedOrder._id });
+        socket.disconnect();
+      } catch {}
+      socketRef.current = null;
+    };
+  }, [showModal, selectedOrder?._id, selectedOrder?.orderStatus, selectedOrder?.liveTrackingEnabled]);
+
+  const handleAssignDelivery = async () => {
+    if (!selectedOrder?._id) return;
+    try {
+      setAssigningDelivery(true);
+      const updated = await assignDeliveryBoyToOrder(selectedOrder._id, {
+        deliveryBoyId: selectedDeliveryBoyId || null,
+      });
+      setSelectedOrder(updated);
+      setLiveTrackingEnabled(Boolean(updated?.liveTrackingEnabled));
+      setLiveLocation(
+        updated?.lastDeliveryLocation?.lat
+          ? {
+              lat: updated.lastDeliveryLocation.lat,
+              lng: updated.lastDeliveryLocation.lng,
+              updatedAt: updated.lastDeliveryLocation.updatedAt,
+            }
+          : null
+      );
+      showToast('Delivery assignment updated');
+      fetchOrders(true);
+    } catch (error) {
+      console.error('Failed to assign delivery', error);
+      alert('Failed to update delivery assignment');
+    } finally {
+      setAssigningDelivery(false);
+    }
+  };
+
+  const handleToggleTracking = async (enabled) => {
+    if (!selectedOrder?._id) return;
+    if (!selectedDeliveryBoyId) {
+      setLiveTrackingEnabled(false);
+      alert('Assign a delivery boy first');
+      return;
+    }
+
+    try {
+      setTogglingTracking(true);
+      const updated = await setOrderTrackingEnabled(selectedOrder._id, enabled);
+      setSelectedOrder(updated);
+      setLiveTrackingEnabled(Boolean(updated?.liveTrackingEnabled));
+      showToast(enabled ? 'Tracking resumed' : 'Tracking paused');
+      fetchOrders(true);
+    } catch (error) {
+      console.error('Failed to toggle tracking', error);
+      const msg = error?.response?.data?.message || 'Failed to toggle tracking';
+      alert(msg);
+      setLiveTrackingEnabled(Boolean(selectedOrder?.liveTrackingEnabled));
+    } finally {
+      setTogglingTracking(false);
+    }
+  };
+
+  const handleCreateDeliveryBoy = async () => {
+    const name = newDeliveryBoyName.trim();
+    const phone = newDeliveryBoyPhone.trim();
+    if (!name || !phone) {
+      alert('Name and phone are required');
+      return;
+    }
+    try {
+      setCreatingDeliveryBoy(true);
+      await createDeliveryBoy({ name, phone, isActive: true });
+      setNewDeliveryBoyName('');
+      setNewDeliveryBoyPhone('');
+      await fetchDeliveryBoys();
+      showToast('Delivery boy created');
+    } catch (error) {
+      console.error('Failed to create delivery boy', error);
+      alert(error?.response?.data?.message || 'Failed to create delivery boy');
+    } finally {
+      setCreatingDeliveryBoy(false);
+    }
+  };
+
+  const copyText = async (text) => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {}
+    try {
+      const input = document.createElement('textarea');
+      input.value = text;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleCopyTrackingLink = async () => {
+    if (!selectedOrder?._id) return;
+    if (!selectedDeliveryBoyId) {
+      alert('Select a delivery boy first');
+      return;
+    }
+    try {
+      setCopyingLink(true);
+      const data = await generateDeliveryTrackingLink(selectedOrder._id, { deliveryBoyId: selectedDeliveryBoyId });
+      const url = data?.url;
+      if (!url) {
+        alert('Failed to generate link');
+        return;
+      }
+      const ok = await copyText(url);
+      if (ok) {
+        showToast('Tracking link copied');
+      } else {
+        // Fallback so the admin can still share it
+        window.prompt('Copy tracking link:', url);
+      }
+    } catch (error) {
+      console.error('Failed to generate tracking link', error);
+      alert(error?.response?.data?.message || 'Failed to generate tracking link');
+    } finally {
+      setCopyingLink(false);
+    }
   };
 
   const renderStatusBadge = (status) => {
@@ -311,6 +587,150 @@ function OrdersList() {
                 <div className="flex justify-between text-lg font-bold">
                   <span>Total</span>
                   <span className="text-orange-600">{formatCurrency(selectedOrder.totalPrice)}</span>
+                </div>
+              </div>
+
+              <div className="border-t pt-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-lg font-semibold">Delivery Assignment</h4>
+                  <button
+                    type="button"
+                    onClick={fetchDeliveryBoys}
+                    className="text-sm px-3 py-1 border rounded-lg hover:bg-gray-50"
+                    disabled={deliveryBoysLoading}
+                  >
+                    {deliveryBoysLoading ? 'Refreshing...' : 'Refresh'}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Delivery boy</label>
+                    <select
+                      value={selectedDeliveryBoyId}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setSelectedDeliveryBoyId(next);
+                        if (!next) {
+                          setLiveTrackingEnabled(false);
+                        }
+                      }}
+                      className="w-full border rounded-lg px-3 py-2 text-sm"
+                    >
+                      <option value="">Unassigned</option>
+                      {deliveryBoys.map((db) => (
+                        <option key={db._id} value={db._id}>
+                          {db.name} ({db.phone}){db.isActive === false ? ' - inactive' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-end">
+                    <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={liveTrackingEnabled}
+                        onChange={(e) => {
+                          const next = e.target.checked;
+                          setLiveTrackingEnabled(next);
+                          handleToggleTracking(next);
+                        }}
+                        disabled={!selectedDeliveryBoyId || togglingTracking}
+                      />
+                      Tracking (pause / resume)
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={handleAssignDelivery}
+                    className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-800 disabled:opacity-60"
+                    disabled={assigningDelivery}
+                  >
+                    {assigningDelivery ? 'Saving...' : 'Save Assignment'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCopyTrackingLink}
+                    className="border px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-60"
+                    disabled={copyingLink || !selectedDeliveryBoyId}
+                    title={!selectedDeliveryBoyId ? 'Select a delivery boy first' : 'Copy delivery tracking link'}
+                  >
+                    {copyingLink ? 'Copying...' : 'Copy Tracking Link'}
+                  </button>
+
+                  <div className="text-sm text-gray-600 flex items-center">
+                    {selectedOrder.assignedDeliveryBoy ? (
+                      <span>
+                        Assigned: {selectedOrder.assignedDeliveryBoy?.name || '—'}
+                      </span>
+                    ) : (
+                      <span>Assigned: —</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h5 className="text-sm font-semibold text-gray-800 mb-3">Add delivery boy</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <input
+                      value={newDeliveryBoyName}
+                      onChange={(e) => setNewDeliveryBoyName(e.target.value)}
+                      placeholder="Name"
+                      className="border rounded-lg px-3 py-2 text-sm"
+                    />
+                    <input
+                      value={newDeliveryBoyPhone}
+                      onChange={(e) => setNewDeliveryBoyPhone(e.target.value)}
+                      placeholder="Phone"
+                      className="border rounded-lg px-3 py-2 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreateDeliveryBoy}
+                      className="border rounded-lg px-3 py-2 text-sm hover:bg-white disabled:opacity-60"
+                      disabled={creatingDeliveryBoy}
+                    >
+                      {creatingDeliveryBoy ? 'Creating...' : 'Create'}
+                    </button>
+                  </div>
+                </div>
+
+                {selectedOrder?.lastDeliveryLocation?.lat && (
+                  <div className="text-sm text-gray-600">
+                    Last location: {selectedOrder.lastDeliveryLocation.lat}, {selectedOrder.lastDeliveryLocation.lng}
+                  </div>
+                )}
+
+                <div className="bg-gray-50 rounded-lg p-4 text-sm space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-gray-800">Live location</span>
+                    <span className="text-gray-600">
+                      {selectedOrder.liveTrackingEnabled
+                        ? (trackingActive ? 'Active' : 'Unavailable')
+                        : 'Not enabled'}
+                    </span>
+                  </div>
+
+                  {trackingMessage && <div className="text-gray-600">{trackingMessage}</div>}
+
+                  <div className="text-gray-700">
+                    <span className="font-semibold">Coords:</span>{' '}
+                    {liveLocation
+                      ? `${liveLocation.lat}, ${liveLocation.lng}`
+                      : '—'}
+                  </div>
+                  <div className="text-gray-700">
+                    <span className="font-semibold">Last update:</span>{' '}
+                    {liveLocation?.updatedAt
+                      ? new Date(liveLocation.updatedAt).toLocaleString()
+                      : '—'}
+                  </div>
                 </div>
               </div>
             </div>

@@ -3,8 +3,11 @@ import { useNavigate, useParams } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { CartContext } from "../context/CartContext";
 import Loader from "../components/Loader";
+import { getAdminThumbUrl } from '../lib/cloudinary.js';
 import { getOrderDetails } from "../services/orderService";
 import OrderStatusTracker from "./OrderStatusTracker";
+import LiveTrackingMap from "../components/LiveTrackingMap";
+import { createSocket } from "../services/socket";
 
 const formatCurrency = (value = 0) =>
   new Intl.NumberFormat("en-IN", {
@@ -20,6 +23,9 @@ export default function OrderDetails() {
   const { id } = useParams();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [liveLocation, setLiveLocation] = useState(null);
+  const [trackingActive, setTrackingActive] = useState(false);
+  const [trackingMessage, setTrackingMessage] = useState('');
 
   useEffect(() => {
     if (!user) {
@@ -35,6 +41,88 @@ export default function OrderDetails() {
     } catch {}
     fetchOrder();
   }, [user, id]);
+
+  useEffect(() => {
+    if (!order?._id) return;
+
+    const canTrack =
+      order.orderStatus === 'Out for Delivery' &&
+      order.liveTrackingEnabled === true;
+
+    if (!canTrack) {
+      setTrackingActive(false);
+      setTrackingMessage('');
+      return;
+    }
+
+    const socket = createSocket();
+
+    const join = () => {
+      socket.emit('joinOrder', { orderId: order._id }, (ack) => {
+        if (ack?.ok) {
+          setTrackingActive(true);
+          setTrackingMessage('Live tracking is active');
+        } else {
+          setTrackingActive(false);
+          setTrackingMessage('Unable to join live tracking');
+        }
+      });
+    };
+
+    socket.on('connect', join);
+
+    // Spec event (new)
+    socket.on('delivery:location:update', (payload) => {
+      if (!payload?.orderId || payload.orderId !== String(order._id)) return;
+      if (typeof payload.lat !== 'number' || typeof payload.lng !== 'number') return;
+
+      setLiveLocation({
+        lat: payload.lat,
+        lng: payload.lng,
+        updatedAt: payload.updatedAt || payload.timestamp,
+        speed: payload.speed,
+        heading: payload.heading,
+        accuracy: payload.accuracy,
+      });
+    });
+
+    // Legacy event (backward compatibility)
+    socket.on('orderLocationUpdate', (payload) => {
+      if (!payload?.orderId || payload.orderId !== order._id) return;
+      const loc = payload.location;
+      if (loc && typeof loc.lat === 'number' && typeof loc.lng === 'number') {
+        setLiveLocation({
+          lat: loc.lat,
+          lng: loc.lng,
+          updatedAt: loc.updatedAt,
+        });
+      }
+    });
+
+    socket.on('trackingStopped', (payload) => {
+      if (!payload?.orderId || payload.orderId !== String(order._id)) return;
+      setTrackingActive(false);
+      setTrackingMessage('Tracking stopped');
+    });
+
+    socket.on('orderStatusUpdated', (payload) => {
+      if (!payload?.orderId || payload.orderId !== String(order._id)) return;
+      if (payload.orderStatus === 'Delivered') {
+        setTrackingActive(false);
+        setTrackingMessage('Order delivered');
+      }
+    });
+
+    // Initial join if already connected
+    if (socket.connected) join();
+
+    return () => {
+      try {
+        socket.emit('leaveOrder', { orderId: order._id });
+        socket.disconnect();
+      } catch {}
+    };
+  }, [order?._id, order?.orderStatus, order?.liveTrackingEnabled]);
 
   const fetchOrder = async () => {
     try {
@@ -71,6 +159,24 @@ export default function OrderDetails() {
   if (!order) return null;
 
   const shipping = order.shippingAddress || {};
+
+  const customerLocation =
+    shipping?.location && typeof shipping.location.lat === 'number' && typeof shipping.location.lng === 'number'
+      ? {
+          lat: shipping.location.lat,
+          lng: shipping.location.lng,
+        }
+      : null;
+
+  const initialLocation = order?.lastDeliveryLocation?.lat
+    ? {
+        lat: order.lastDeliveryLocation.lat,
+        lng: order.lastDeliveryLocation.lng,
+        updatedAt: order.lastDeliveryLocation.updatedAt,
+      }
+    : null;
+
+  const displayLocation = liveLocation || initialLocation;
 
   // ETA extraction
   const etaDate = order?.estimatedDelivery ? new Date(order.estimatedDelivery) : null;
@@ -128,6 +234,58 @@ export default function OrderDetails() {
         <h2 className="text-lg font-semibold mb-4">Order Status</h2>
         <OrderStatusTracker currentStatus={order.orderStatus?.toLowerCase()} />
       </div>
+
+      {(order.orderStatus === 'Out for Delivery' || order.liveTrackingEnabled) && (
+        <div className="bg-white rounded-xl shadow p-6 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Live Tracking</h2>
+            <span className="text-sm text-gray-600">
+              {order.liveTrackingEnabled ? (trackingActive ? 'Active' : 'Unavailable') : 'Not enabled'}
+            </span>
+          </div>
+
+          {trackingMessage && <p className="text-sm text-gray-600">{trackingMessage}</p>}
+
+          <div className="bg-gray-50 rounded-lg p-4 text-sm space-y-2">
+            {order.assignedDeliveryBoy && (
+              <div className="text-gray-700">
+                <span className="font-semibold">Delivery boy:</span>{' '}
+                {order.assignedDeliveryBoy.name}{order.assignedDeliveryBoy.phone ? ` (${order.assignedDeliveryBoy.phone})` : ''}
+              </div>
+            )}
+            <div className="text-gray-700">
+              <span className="font-semibold">Coords:</span>{' '}
+              {displayLocation ? `${displayLocation.lat}, ${displayLocation.lng}` : '—'}
+            </div>
+            <div className="text-gray-700">
+              <span className="font-semibold">Last update:</span>{' '}
+              {displayLocation?.updatedAt ? new Date(displayLocation.updatedAt).toLocaleString() : '—'}
+            </div>
+          </div>
+
+          {order.liveTrackingEnabled ? (
+            displayLocation ? (
+              <>
+                <LiveTrackingMap
+                  delivery={{
+                    lat: displayLocation.lat,
+                    lng: displayLocation.lng,
+                    speed: liveLocation?.speed,
+                    heading: liveLocation?.heading,
+                    accuracy: liveLocation?.accuracy,
+                    updatedAt: displayLocation?.updatedAt,
+                  }}
+                  customer={customerLocation}
+                />
+              </>
+            ) : (
+              <p className="text-sm text-gray-600">Waiting for the delivery location…</p>
+            )
+          ) : (
+            <p className="text-sm text-gray-600">Tracking will appear once enabled by admin.</p>
+          )}
+        </div>
+      )}
 
       {/* ---------------------------------------------------------------- */}
       {/* SHIPPING + PAYMENT GRID */}
@@ -195,7 +353,7 @@ export default function OrderDetails() {
               >
                 {/* IMAGE */}
                 <img
-                  src={imageSrc}
+                  src={getAdminThumbUrl(imageSrc)}
                   alt={item.name}
                   className="w-16 h-16 rounded object-cover border mr-4"
                 />

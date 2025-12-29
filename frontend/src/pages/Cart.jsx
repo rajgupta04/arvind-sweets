@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useContext } from 'react';
 import { CartContext } from '../context/CartContext';
 import { FiTrash2, FiPlus, FiMinus } from 'react-icons/fi';
+import { getProductCardThumbUrl } from '../lib/cloudinary.js';
 
 function Cart() {
   const { cartItems, updateQuantity, removeFromCart, getCartTotal, clearCart } = useContext(CartContext);
@@ -42,7 +43,7 @@ function Cart() {
                 <div className="flex-shrink-0">
                   {item.images && item.images.length > 0 ? (
                     <img
-                      src={item.images[0]}
+                      src={getProductCardThumbUrl(item.images[0])}
                       alt={item.name}
                       className="w-32 h-32 object-cover rounded-lg"
                     />
