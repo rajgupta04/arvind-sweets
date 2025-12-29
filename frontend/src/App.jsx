@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { CartProvider } from './context/CartContext';
 import { AuthProvider } from './context/AuthContext';
 import PublicLayout from './components/PublicLayout';
+import ProtectedRoute from './components/ProtectedRoute';
 
 // Pages
 import Home from './pages/Home';
@@ -17,6 +18,7 @@ import Register from './pages/Register';
 import Orders from './pages/Orders';
 import OrderDetails from './pages/OrderDetails';
 import OrderSuccess from './pages/OrderSuccess';
+import OAuthSuccess from './pages/OAuthSuccess';
 
 // Admin Pages
 import AdminDashboard from './admin/pages/AdminDashboard';
@@ -55,6 +57,7 @@ function App() {
             {/* Public Routes - With Navbar/Footer */}
             <Route element={<PublicLayout />}>
               <Route path="/" element={<Home />} />
+              <Route path="/home" element={<Home />} />
               <Route path="/products" element={<Products />} />
               <Route path="/products/:id" element={<ProductDetail />} />
               <Route path="/cart" element={<Cart />} />
@@ -62,9 +65,10 @@ function App() {
               <Route path="/contact" element={<Contact />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/orders" element={<Orders />} />
-              <Route path="/orders/:id" element={<OrderDetails />} />
+              <Route path="/oauth/success" element={<OAuthSuccess />} />
+              <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+              <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
+              <Route path="/orders/:id" element={<ProtectedRoute><OrderDetails /></ProtectedRoute>} />
               <Route path="/order-success/:id" element={<OrderSuccess />} />
             </Route>
           </Routes>

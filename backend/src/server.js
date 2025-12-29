@@ -1,18 +1,20 @@
 // backend/src/server.js
-import express from "express";
-import dotenv from "dotenv";
-import path from "path";
-import connectDB from "./config/db.js";
-import app from "./app.js";
+import dotenv from 'dotenv';
+import path from 'path';
+import connectDB from './config/db.js';
 
 // ✅ Load .env safely from backend root no matter where command is run
-dotenv.config({ path: path.resolve(process.cwd(), "./backend/.env") });
+dotenv.config({ path: path.resolve(process.cwd(), './backend/.env') });
+
+// Important: in ESM, static imports are evaluated before dotenv.config.
+// Use a dynamic import so app initialization sees env vars.
+const { default: app } = await import('./app.js');
 
 // 🧠 Debugging log
-console.log("MONGO_URI:", process.env.MONGO_URI);
+console.log('MONGO_URI:', process.env.MONGO_URI);
 
 if (!process.env.MONGO_URI) {
-  console.error("❌ MONGO_URI not found. Check .env file path or dotenv.config()");
+  console.error('❌ MONGO_URI not found. Check .env file path or dotenv.config()');
   process.exit(1);
 }
 
@@ -25,6 +27,6 @@ connectDB()
     });
   })
   .catch((err) => {
-    console.error("❌ Failed to connect to MongoDB:", err.message);
+    console.error('❌ Failed to connect to MongoDB:', err.message);
     process.exit(1);
   });

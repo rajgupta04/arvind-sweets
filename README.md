@@ -86,9 +86,17 @@ arvind-sweets/
 
 3. Create `.env` file:
    ```env
-   MONGODB_URI=mongodb://localhost:27017/arvind-sweets
+   MONGO_URI=mongodb://localhost:27017/arvind-sweets
    JWT_SECRET=your-secret-key-here
    PORT=5000
+
+   # Google OAuth (required for "Continue with Google")
+   GOOGLE_CLIENT_ID=xxxxxxxxxxxx.apps.googleusercontent.com
+   GOOGLE_CLIENT_SECRET=xxxxxxxxxxxx
+   GOOGLE_CALLBACK_URL=http://localhost:5000/api/auth/google/callback
+
+   # Where backend redirects after Google login
+   FRONTEND_URL=http://localhost:5173
    ```
 
 4. Start the server:
@@ -130,6 +138,82 @@ arvind-sweets/
 - `GET /api/users/profile` - Get user profile (Protected)
 - `PUT /api/users/profile` - Update profile (Protected)
 - `GET /api/users` - Get all users (Admin)
+
+### Google Sign-In (OAuth 2.0)
+- `GET /api/auth/google` - Start Google OAuth
+- `GET /api/auth/google/callback` - OAuth callback (redirects to frontend with `?token=`)
+
+## 🔑 Google Sign-In Setup (No Firebase)
+
+This project uses Google OAuth 2.0 (Passport) on the backend and mints the same JWT as normal login.
+
+### 1) Create OAuth client in Google Cloud
+1. Go to Google Cloud Console → APIs & Services → Credentials
+2. Create **OAuth client ID** → **Web application**
+3. Configure:
+    - **Authorized JavaScript origins**:
+       - `http://localhost:5173`
+       - `https://arvindsweets.com`
+    - **Authorized redirect URIs**:
+       - `http://localhost:5000/api/auth/google/callback`
+       - `https://arvind-sweets.onrender.com/api/auth/google/callback`
+
+Note: In the OAuth consent screen, add `arvindsweets.com` under **Authorized domains**.
+
+### 2) Set backend environment variables
+In `backend/.env`:
+```env
+GOOGLE_CLIENT_ID=xxxxxxxxxxxx.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=xxxxxxxxxxxx
+GOOGLE_CALLBACK_URL=http://localhost:5000/api/auth/google/callback
+FRONTEND_URL=http://localhost:5173
+
+# Optional: allow both local + production redirects safely
+FRONTEND_URLS=http://localhost:5173,https://arvindsweets.com
+```
+
+### Production (Render) env values
+On Render (backend):
+```env
+GOOGLE_CALLBACK_URL=https://arvind-sweets.onrender.com/api/auth/google/callback
+FRONTEND_URL=https://arvindsweets.com
+FRONTEND_URLS=http://localhost:5173,https://arvindsweets.com
+```
+
+### 3) Set frontend environment variable (optional)
+If your frontend is not using a dev proxy, set:
+```env
+VITE_BACKEND_URL=http://localhost:5000
+```
+
+For production (arvindsweets.com), set:
+```env
+VITE_BACKEND_URL=https://arvind-sweets.onrender.com
+```
+
+### 4) Verified email requirement
+Only **verified Google emails** are allowed. If Google returns an unverified email, login fails and the user is redirected back with an error.
+
+## ✅ How to Test (Local + Deployed)
+
+### Local
+1. Backend env:
+   - `GOOGLE_CALLBACK_URL=http://localhost:5000/api/auth/google/callback`
+   - `FRONTEND_URL=http://localhost:5173`
+2. Run backend: `cd backend && npm run server`
+3. Run frontend: `cd frontend && npm run dev`
+4. Open `http://localhost:5173/login` → **Continue with Google**
+
+### Deployed
+1. Ensure Render env:
+   - `GOOGLE_CALLBACK_URL=https://arvind-sweets.onrender.com/api/auth/google/callback`
+   - `FRONTEND_URL=https://arvindsweets.com`
+2. Open `https://arvindsweets.com/login` → **Continue with Google**
+
+### Extra: Test Render backend with local frontend
+Open this URL in your browser:
+`https://arvind-sweets.onrender.com/api/auth/google?redirect=http://localhost:5173`
+This is safe because redirects are allowlisted via `FRONTEND_URLS`.
 
 ### Orders
 - `POST /api/orders` - Create order (Protected)

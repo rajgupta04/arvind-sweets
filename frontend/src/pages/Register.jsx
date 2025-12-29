@@ -1,11 +1,12 @@
 // Register page component
-import React, { useState, useContext } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useContext } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { FiMail, FiLock, FiUser, FiPhone } from 'react-icons/fi';
 
 function Register() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { registerUser } = useContext(AuthContext);
   const [formData, setFormData] = useState({
     name: '',
@@ -16,6 +17,21 @@ function Register() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const oauthError = params.get('error');
+
+    if (oauthError) {
+      setError(decodeURIComponent(oauthError));
+    }
+  }, [location.search]);
+
+  const handleGoogleSignIn = () => {
+    const backendBase = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || '';
+    const url = backendBase ? `${backendBase}/api/auth/google` : '/api/auth/google';
+    window.location.href = url;
+  };
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -72,6 +88,26 @@ function Register() {
               {error}
             </div>
           )}
+
+          <div>
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={loading}
+              className="w-full flex justify-center py-2 px-4 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50"
+            >
+              Continue with Google
+            </button>
+          </div>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500">Or</span>
+            </div>
+          </div>
           
           <div className="space-y-4">
             <div>

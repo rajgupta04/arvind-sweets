@@ -1,5 +1,5 @@
 // Auth context - global authentication state
-import React, { createContext, useState, useEffect } from 'react';
+import React, { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { login, register, getProfile, updateProfile } from '../services/authService.js';
 
 export const AuthContext = createContext();
@@ -9,40 +9,96 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
-    if (storedToken && storedUser) {
-      setToken(storedToken);
+  const bootstrappedRef = useRef(false);
+  const profileRequestRef = useRef(null);
+
+  const clearAuth = useCallback(() => {
+    try {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    } catch {}
+    setToken(null);
+    setUser(null);
+  }, []);
+
+  const fetchProfileOnce = useCallback(async () => {
+    if (profileRequestRef.current) return profileRequestRef.current;
+
+    profileRequestRef.current = (async () => {
+      const response = await getProfile();
+      setUser(response.data);
       try {
-        setUser(JSON.parse(storedUser));
-      } catch {
-        setUser(null);
-      }
-      setLoading(false);
-    } else if (storedToken) {
-      loadUser();
-    } else {
-      setLoading(false);
+        localStorage.setItem('user', JSON.stringify(response.data));
+      } catch {}
+      return response.data;
+    })();
+
+    try {
+      return await profileRequestRef.current;
+    } finally {
+      // keep ref around during this session so we never refetch on re-renders
     }
   }, []);
 
-  const loadUser = async () => {
-    try {
-      const response = await getProfile();
-      setUser(response.data);
-    } catch (error) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      setToken(null);
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    if (bootstrappedRef.current) return;
+    bootstrappedRef.current = true;
 
-  const loginUser = async (email, password) => {
+    const bootstrap = async () => {
+      setLoading(true);
+
+      // Accept OAuth token from URL exactly once (fresh page load after Google redirect)
+      // and remove it from the URL ASAP.
+      let urlToken = null;
+      let urlError = null;
+      try {
+        const params = new URLSearchParams(window.location.search);
+        urlToken = params.get('token');
+        urlError = params.get('error');
+        if ((urlToken || urlError) && window.location.pathname.startsWith('/oauth/success')) {
+          window.history.replaceState({}, '', '/oauth/success');
+        }
+      } catch {}
+
+      if (urlError) {
+        clearAuth();
+        setLoading(false);
+        return;
+      }
+
+      const storedToken = (() => {
+        try {
+          return localStorage.getItem('token');
+        } catch {
+          return null;
+        }
+      })();
+
+      const tokenToUse = urlToken || storedToken;
+      if (!tokenToUse) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        if (urlToken) {
+          localStorage.setItem('token', urlToken);
+        }
+        setToken(tokenToUse);
+        await fetchProfileOnce();
+      } catch {
+        clearAuth();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    bootstrap();
+  }, []);
+
+  const loginUser = useCallback(async (email, password) => {
     try {
+      setLoading(true);
       const response = await login(email, password);
       const userData = response.data;
       localStorage.setItem('token', userData.token);
@@ -52,11 +108,30 @@ export const AuthProvider = ({ children }) => {
       return userData;
     } catch (error) {
       throw error;
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
-  const registerUser = async (userData) => {
+  // NOTE: OAuth flow is bootstrapped from URL/localStorage on app load.
+  // Keep this method for any future non-reload OAuth flows, but do NOT use it from OAuthSuccess.
+  const loginWithToken = useCallback(async (jwtToken) => {
     try {
+      setLoading(true);
+      localStorage.setItem('token', jwtToken);
+      setToken(jwtToken);
+      await fetchProfileOnce();
+    } catch (error) {
+      clearAuth();
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, [clearAuth, fetchProfileOnce]);
+
+  const registerUser = useCallback(async (userData) => {
+    try {
+      setLoading(true);
       const response = await register(userData);
       const userDataResponse = response.data;
       localStorage.setItem('token', userDataResponse.token);
@@ -66,10 +141,12 @@ export const AuthProvider = ({ children }) => {
       return userDataResponse;
     } catch (error) {
       throw error;
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
-  const updateUser = async (userData) => {
+  const updateUser = useCallback(async (userData) => {
     try {
       const response = await updateProfile(userData);
       setUser(response.data);
@@ -83,26 +160,25 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       throw error;
     }
-  };
+  }, []);
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setToken(null);
-    setUser(null);
-  };
+  const logout = useCallback(() => {
+    clearAuth();
+  }, [clearAuth]);
+
+  const value = useMemo(() => ({
+    user,
+    token,
+    loading,
+    loginUser,
+    loginWithToken,
+    registerUser,
+    updateUser,
+    logout,
+  }), [user, token, loading, loginUser, loginWithToken, registerUser, updateUser, logout]);
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      token,
-      loading,
-      loginUser,
-      registerUser,
-      updateUser,
-      logout,
-      loadUser
-    }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

@@ -28,7 +28,7 @@ function Navbar() {
     <nav className="bg-white shadow-md sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          <Link to="/" className="flex items-center">
+          <Link to="/home" className="flex items-center">
             <img
               src={logo}
               alt="Arvind Sweets Logo"
@@ -38,7 +38,7 @@ function Navbar() {
 
           {/* Desktop Menu */}
           <div className="hidden md:flex items-center space-x-6">
-            <Link to="/" className="text-gray-700 hover:text-orange-600 transition">Home</Link>
+            <Link to="/home" className="text-gray-700 hover:text-orange-600 transition">Home</Link>
             <Link to="/products" className="text-gray-700 hover:text-orange-600 transition">Products</Link>
             <Link to="/contact" className="text-gray-700 hover:text-orange-600 transition">Contact</Link>
             {user && (
@@ -136,7 +136,7 @@ function Navbar() {
         {/* Mobile Menu */}
         {mobileMenuOpen && (
           <div className="md:hidden py-4 space-y-3">
-            <Link to="/" className="block text-gray-700 hover:text-orange-600">Home</Link>
+            <Link to="/home" className="block text-gray-700 hover:text-orange-600">Home</Link>
             <Link to="/products" className="block text-gray-700 hover:text-orange-600">Products</Link>
             <Link to="/contact" className="block text-gray-700 hover:text-orange-600">Contact</Link>
             <Link to="/cart" className="block text-gray-700 hover:text-orange-600">Cart ({getCartItemsCount()})</Link>
