@@ -7,6 +7,7 @@ import PublicLayout from './components/PublicLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
 import DeliveryBoyRoute from './components/DeliveryBoyRoute';
+import ScrollToTop from './components/ScrollToTop';
 
 // Pages
 import Home from './pages/Home';
@@ -50,6 +51,7 @@ function App() {
             v7_relativeSplatPath: true,
           }}
         >
+          <ScrollToTop />
           <Routes>
             {/* Admin Routes - No Navbar/Footer */}
             <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
@@ -75,7 +77,7 @@ function App() {
               <Route path="/products" element={<Products />} />
               <Route path="/products/:id" element={<ProductDetail />} />
               <Route path="/cart" element={<Cart />} />
-              <Route path="/checkout" element={<Checkout />} />
+              <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />

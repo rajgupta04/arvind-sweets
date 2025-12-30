@@ -1,5 +1,5 @@
 // Product Listing page with filters
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getProducts } from '../services/productService';
 import ProductCard from '../components/ProductCard';
@@ -9,29 +9,37 @@ import { FiSearch, FiFilter, FiX } from 'react-icons/fi';
 function Products() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [fetching, setFetching] = useState(false);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [category, setCategory] = useState(searchParams.get('category') || '');
-  const [minPrice, setMinPrice] = useState('');
-  const [maxPrice, setMaxPrice] = useState('');
+  const [minPrice, setMinPrice] = useState(searchParams.get('minPrice') || '');
+  const [maxPrice, setMaxPrice] = useState(searchParams.get('maxPrice') || '');
   const [showFilters, setShowFilters] = useState(false);
+  const [didInitFromUrl, setDidInitFromUrl] = useState(false);
 
   const categories = ['Bengali Sweets', 'Dry Sweets', 'Snacks', 'Seasonal', 'Fastfood', 'Special Offers'];
 
   // Fetch products function
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async ({ nextCategory, nextSearch, nextMinPrice, nextMaxPrice, mode = 'update' } = {}) => {
     try {
-      setLoading(true);
+      if (mode === 'initial') {
+        setInitialLoading(true);
+      } else {
+        setFetching(true);
+      }
       setError(null);
-      const categoryParam = searchParams.get('category') || '';
-      const searchParam = searchParams.get('search') || '';
+      const categoryParam = (nextCategory ?? category) || '';
+      const searchParam = (nextSearch ?? search) || '';
+      const minPriceParam = (nextMinPrice ?? minPrice) || '';
+      const maxPriceParam = (nextMaxPrice ?? maxPrice) || '';
       
       const params = {};
       if (categoryParam) params.category = categoryParam;
       if (searchParam) params.search = searchParam;
-      if (minPrice) params.minPrice = minPrice;
-      if (maxPrice) params.maxPrice = maxPrice;
+      if (minPriceParam) params.minPrice = minPriceParam;
+      if (maxPriceParam) params.maxPrice = maxPriceParam;
 
       console.log('Fetching products with params:', params);
       const response = await getProducts(params);
@@ -52,44 +60,55 @@ function Products() {
       setError(error.response?.data?.message || error.message || 'Failed to fetch products. Make sure the backend server is running.');
       setProducts([]);
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
+      setFetching(false);
     }
-  };
-
-  // Initial fetch on mount
-  useEffect(() => {
-    fetchProducts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [category, maxPrice, minPrice, search]);
 
   // Fetch products when URL params change
   useEffect(() => {
-    const categoryParam = searchParams.get('category');
-    const searchParam = searchParams.get('search');
+    const categoryParam = searchParams.get('category') || '';
+    const searchParam = searchParams.get('search') || '';
+    const minPriceParam = searchParams.get('minPrice') || '';
+    const maxPriceParam = searchParams.get('maxPrice') || '';
     
     // Update state from URL params
-    if (categoryParam !== null) setCategory(categoryParam);
-    if (searchParam !== null) setSearch(searchParam);
-    
-    // Fetch products with new params
-    fetchProducts();
+    setCategory(categoryParam);
+    setSearch(searchParam);
+    setMinPrice(minPriceParam);
+    setMaxPrice(maxPriceParam);
+    setDidInitFromUrl(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
+  // Live search/filtering: fetch while typing/changing filters (no URL writes)
+  useEffect(() => {
+    if (!didInitFromUrl) return;
 
-  const handleFilterChange = () => {
-    // Update URL params when filters change
-    const params = new URLSearchParams();
-    if (search) params.set('search', search);
-    if (category) params.set('category', category);
-    if (minPrice) params.set('minPrice', minPrice);
-    if (maxPrice) params.set('maxPrice', maxPrice);
-    setSearchParams(params);
-  };
+    const t = setTimeout(() => {
+      fetchProducts({
+        nextCategory: category,
+        nextSearch: search,
+        nextMinPrice: minPrice,
+        nextMaxPrice: maxPrice,
+        mode: 'update',
+      });
+    }, 300);
+
+    return () => clearTimeout(t);
+  }, [category, didInitFromUrl, fetchProducts, maxPrice, minPrice, search]);
+
 
   const handleSearch = (e) => {
     e.preventDefault();
-    handleFilterChange();
+    // Keep behavior: Enter / Search triggers immediate fetch
+    fetchProducts({
+      nextCategory: category,
+      nextSearch: search,
+      nextMinPrice: minPrice,
+      nextMaxPrice: maxPrice,
+      mode: 'update',
+    });
   };
 
   const clearFilters = () => {
@@ -100,10 +119,6 @@ function Products() {
     setSearchParams({});
     // fetchProducts will be called automatically via useEffect when searchParams changes
   };
-
-  if (loading) {
-    return <Loader />;
-  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -148,8 +163,8 @@ function Products() {
               <select
                 value={category}
                 onChange={(e) => {
-                  setCategory(e.target.value);
-                  handleFilterChange();
+                  const value = e.target.value;
+                  setCategory(value);
                 }}
                 className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
               >
@@ -166,8 +181,8 @@ function Products() {
                 type="number"
                 value={minPrice}
                 onChange={(e) => {
-                  setMinPrice(e.target.value);
-                  handleFilterChange();
+                  const value = e.target.value;
+                  setMinPrice(value);
                 }}
                 placeholder="0"
                 className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -180,8 +195,8 @@ function Products() {
                 type="number"
                 value={maxPrice}
                 onChange={(e) => {
-                  setMaxPrice(e.target.value);
-                  handleFilterChange();
+                  const value = e.target.value;
+                  setMaxPrice(value);
                 }}
                 placeholder="1000"
                 className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -215,7 +230,7 @@ function Products() {
       )}
 
       {/* Products Grid */}
-      {loading ? (
+      {initialLoading ? (
         <div className="text-center py-12">
           <Loader />
         </div>
@@ -253,6 +268,13 @@ function Products() {
           )}
         </div>
       )}
+
+      {/* Keep context stable while fetching (don’t unmount the search bar) */}
+      {fetching && !initialLoading ? (
+        <div className="mt-6 text-center text-sm text-gray-500">
+          Updating results…
+        </div>
+      ) : null}
     </div>
   );
 }

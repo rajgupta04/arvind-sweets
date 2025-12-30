@@ -7,6 +7,8 @@ import Loader from '../components/Loader';
 import { FiMapPin, FiPackage } from 'react-icons/fi';
 import { placeOrder } from '../services/orderService';
 import { toast } from '../components/ui/use-toast';
+import { listMyAddresses, upsertMyAddress } from '../services/addressService';
+import LocationPickerMap from '../components/LocationPickerMap';
 
 const DELIVERY_CHARGE = 50;
 
@@ -28,6 +30,12 @@ function Checkout() {
     location: null
   });
   const [gpsSuccess, setGpsSuccess] = useState(false);
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [savedAddresses, setSavedAddresses] = useState([]);
+  const [selectedSavedAddressId, setSelectedSavedAddressId] = useState('');
+  const [addressesLoading, setAddressesLoading] = useState(false);
+  const [saveThisAddress, setSaveThisAddress] = useState(true);
+  const hydratedDefaultAddressRef = useRef(false);
 
   useEffect(() => {
     if (!orderPlacedRef.current && cartItems.length === 0) {
@@ -46,10 +54,105 @@ function Checkout() {
   }, [user, shippingAddress.name, shippingAddress.phone]);
 
   useEffect(() => {
-    if (!user) {
-      navigate('/login?redirect=/checkout');
+    // Auth is enforced by <ProtectedRoute> in App routing.
+    // Avoid redirecting during refresh while auth is still bootstrapping.
+  }, []);
+
+  useEffect(() => {
+    const loadAddresses = async () => {
+      if (!user) return;
+      try {
+        setAddressesLoading(true);
+        const list = await listMyAddresses();
+        setSavedAddresses(Array.isArray(list) ? list : []);
+
+        if (hydratedDefaultAddressRef.current) return;
+        hydratedDefaultAddressRef.current = true;
+
+        const defaultAddr = Array.isArray(list) ? list.find((a) => a?.isDefault) : null;
+        const hasAnyShippingText = Boolean(
+          shippingAddress.street || shippingAddress.city || shippingAddress.state || shippingAddress.pincode
+        );
+
+        if (defaultAddr && !hasAnyShippingText) {
+          setSelectedSavedAddressId(String(defaultAddr._id || ''));
+          setShippingAddress((prev) => ({
+            ...prev,
+            name: defaultAddr.name || prev.name,
+            phone: defaultAddr.phone || prev.phone,
+            street: defaultAddr.street || '',
+            city: defaultAddr.city || '',
+            state: defaultAddr.state || '',
+            pincode: defaultAddr.pincode || '',
+            location: defaultAddr.location?.lat && defaultAddr.location?.lng ? defaultAddr.location : prev.location,
+          }));
+          setGpsSuccess(Boolean(defaultAddr.location?.lat && defaultAddr.location?.lng));
+        }
+      } catch {
+        setSavedAddresses([]);
+      } finally {
+        setAddressesLoading(false);
+      }
+    };
+
+    loadAddresses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  const handleSelectSavedAddress = (id) => {
+    const nextId = String(id || '');
+    setSelectedSavedAddressId(nextId);
+    if (!nextId) return;
+
+    const found = savedAddresses.find((a) => String(a?._id) === nextId);
+    if (!found) return;
+
+    setShippingAddress((prev) => ({
+      ...prev,
+      name: found.name || prev.name,
+      phone: found.phone || prev.phone,
+      street: found.street || '',
+      city: found.city || '',
+      state: found.state || '',
+      pincode: found.pincode || '',
+      location:
+        found.location && typeof found.location.lat === 'number' && typeof found.location.lng === 'number'
+          ? found.location
+          : prev.location,
+    }));
+    setGpsSuccess(Boolean(found.location?.lat && found.location?.lng));
+  };
+
+  const maybeAutoSaveAddress = async ({ setDefault } = {}) => {
+    if (!user) return;
+    if (deliveryType !== 'Delivery') return;
+    if (!saveThisAddress) return;
+
+    const payload = {
+      label: '',
+      name: shippingAddress.name,
+      phone: shippingAddress.phone,
+      street: shippingAddress.street,
+      city: shippingAddress.city,
+      state: shippingAddress.state,
+      pincode: shippingAddress.pincode,
+      location: shippingAddress.location || null,
+      setDefault: Boolean(setDefault),
+    };
+
+    try {
+      const createdOrUpdated = await upsertMyAddress(payload);
+      try {
+        const list = await listMyAddresses();
+        setSavedAddresses(Array.isArray(list) ? list : []);
+        if (createdOrUpdated?._id) {
+          setSelectedSavedAddressId(String(createdOrUpdated._id));
+        }
+      } catch {}
+    } catch {
+      // Silent: order placement should not fail if saving address fails
     }
-  }, [user, navigate]);
+  };
 
   const computeItemPrice = (item) => {
     if (item.discount > 0) {
@@ -109,6 +212,9 @@ function Checkout() {
       const response = await placeOrder(orderPayload);
       orderPlacedRef.current = true;
       const { data: order } = response;
+
+      await maybeAutoSaveAddress({ setDefault: savedAddresses.length === 0 });
+
       clearCart();
       navigate(`/order-success/${order._id}`, { state: { orderId: order._id, total: order.totalPrice } });
     } catch (error) {
@@ -166,6 +272,35 @@ function Checkout() {
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-semibold mb-4">Contact & Address</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Saved addresses</label>
+                  <select
+                    value={selectedSavedAddressId}
+                    onChange={(e) => handleSelectSavedAddress(e.target.value)}
+                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    disabled={addressesLoading || savedAddresses.length === 0}
+                  >
+                    <option value="">
+                      {addressesLoading
+                        ? 'Loading…'
+                        : savedAddresses.length === 0
+                          ? 'No saved addresses'
+                          : 'Select a saved address'}
+                    </option>
+                    {savedAddresses.map((a) => {
+                      const label = a?.label ? String(a.label) : '';
+                      const primary = label || a?.street || '';
+                      const secondary = [a?.city, a?.state, a?.pincode].filter(Boolean).join(', ');
+                      const suffix = a?.isDefault ? ' (Default)' : '';
+                      return (
+                        <option key={a._id} value={a._id}>
+                          {primary}{secondary ? ` — ${secondary}` : ''}{suffix}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
                 <input
                   type="text"
                   placeholder="Full Name"
@@ -208,15 +343,47 @@ function Checkout() {
                   >
                     Use My Location
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowMapPicker((v) => !v)}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg"
+                  >
+                    {showMapPicker ? 'Hide Map' : 'Pick on Map'}
+                  </button>
+
                   {gpsSuccess && shippingAddress.location && (
                     <span className="text-green-600 text-sm">Location detected successfully</span>
                   )}
                 </div>
-                {shippingAddress.location && (
-                  <div className="md:col-span-2 text-sm text-gray-700">
-                    Detected: lat {shippingAddress.location.lat.toFixed(6)}, lng {shippingAddress.location.lng.toFixed(6)}
+
+                {showMapPicker ? (
+                  <div className="md:col-span-2">
+                    <LocationPickerMap
+                      value={shippingAddress.location}
+                      onChange={(loc) => {
+                        setShippingAddress((prev) => ({ ...prev, location: loc }));
+                        setGpsSuccess(Boolean(loc?.lat && loc?.lng));
+                      }}
+                      height={260}
+                    />
+                  </div>
+                ) : null}
+
+                {deliveryType === 'Delivery' && (
+                  <div className="md:col-span-2">
+                    <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={saveThisAddress}
+                        onChange={(e) => setSaveThisAddress(e.target.checked)}
+                      />
+                      Save this address for next time
+                    </label>
                   </div>
                 )}
+
                 {deliveryType === 'Delivery' && (
                   <>
                     <input

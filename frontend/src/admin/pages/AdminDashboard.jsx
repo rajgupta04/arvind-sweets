@@ -5,8 +5,65 @@ import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
 import AdminSidebar from '../components/AdminSidebar';
 import AdminNavbar from '../components/AdminNavbar';
-import { getAllProducts } from '../services/adminApi';
+import { getAllOrders, getAllProducts } from '../services/adminApi';
 import { FiPackage, FiDollarSign, FiTrendingUp, FiAlertCircle } from 'react-icons/fi';
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+function toDateKey(d) {
+  const date = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+function formatShortDateLabel(dateKey) {
+  // dateKey: YYYY-MM-DD
+  try {
+    const [y, m, d] = String(dateKey).split('-').map((v) => Number(v));
+    const dt = new Date(y, (m || 1) - 1, d || 1);
+    return dt.toLocaleDateString(undefined, { day: '2-digit', month: 'short' });
+  } catch {
+    return String(dateKey);
+  }
+}
+
+function buildDailySeries(orders, days = 14) {
+  const end = new Date();
+  end.setHours(0, 0, 0, 0);
+  const start = new Date(end);
+  start.setDate(start.getDate() - (days - 1));
+
+  const counts = new Map();
+  for (const o of Array.isArray(orders) ? orders : []) {
+    const key = toDateKey(o?.createdAt);
+    if (!key) continue;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+
+  const series = [];
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    const key = toDateKey(cursor);
+    series.push({
+      dateKey: key,
+      date: formatShortDateLabel(key),
+      orders: counts.get(key) || 0,
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return series;
+}
 
 function AdminDashboard() {
   const { user } = useContext(AuthContext);
@@ -18,6 +75,8 @@ function AdminDashboard() {
     featuredProducts: 0
   });
   const [loading, setLoading] = useState(true);
+  const [ordersSeries, setOrdersSeries] = useState([]);
+  const [ordersSeriesLoading, setOrdersSeriesLoading] = useState(true);
 
   useEffect(() => {
     if (!user || user.role !== 'admin') {
@@ -29,8 +88,13 @@ function AdminDashboard() {
 
   const fetchStats = async () => {
     try {
-      const products = await getAllProducts();
-      const productList = Array.isArray(products) ? products : products.data || [];
+      const [products, orders] = await Promise.all([
+        getAllProducts(),
+        getAllOrders(),
+      ]);
+
+      const productList = Array.isArray(products) ? products : products?.data || [];
+      const ordersList = Array.isArray(orders) ? orders : orders?.data || [];
       
       setStats({
         totalProducts: productList.length,
@@ -38,10 +102,14 @@ function AdminDashboard() {
         outOfStock: productList.filter(p => !p.isAvailable || p.stock === 0).length,
         featuredProducts: productList.filter(p => p.isFeatured).length
       });
+
+      setOrdersSeries(buildDailySeries(ordersList, 14));
     } catch (error) {
       console.error('Error fetching stats:', error);
+      setOrdersSeries([]);
     } finally {
       setLoading(false);
+      setOrdersSeriesLoading(false);
     }
   };
 
@@ -127,6 +195,53 @@ function AdminDashboard() {
               );
             })}
           </div>
+
+          {/* Orders Analytics */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.12 }}
+            className="bg-white rounded-lg shadow-md p-6 mb-8"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-800">Orders by Date</h2>
+                <p className="text-sm text-gray-600">Last 14 days</p>
+              </div>
+            </div>
+
+            <div className="h-72">
+              {ordersSeriesLoading ? (
+                <div className="h-full flex items-center justify-center text-sm text-gray-600">
+                  Loading chart…
+                </div>
+              ) : ordersSeries.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-sm text-gray-600">
+                  No order data available
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={ordersSeries} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" tickMargin={8} />
+                    <YAxis allowDecimals={false} width={32} />
+                    <Tooltip
+                      formatter={(value) => [value, 'Orders']}
+                      labelFormatter={(label) => `Date: ${label}`}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="orders"
+                      stroke="#ea580c"
+                      strokeWidth={2}
+                      dot={{ r: 2 }}
+                      activeDot={{ r: 4 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </motion.div>
 
           {/* Quick Actions */}
           <motion.div

@@ -2,6 +2,107 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .pill-fire-border {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .pill-fire-border::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    padding: 2px;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.9;
+    filter: saturate(1.05);
+
+    /* Uses the same orange as `bg-orange-600` already used in the pill nav */
+    background: conic-gradient(
+      from var(--pill-fire-angle),
+      rgba(234, 88, 12, 0) 0deg,
+      rgba(234, 88, 12, 0.9) 25deg,
+      rgba(234, 88, 12, 0) 55deg,
+      rgba(234, 88, 12, 0) 110deg,
+      rgba(234, 88, 12, 0.85) 140deg,
+      rgba(234, 88, 12, 0) 175deg,
+      rgba(234, 88, 12, 0) 220deg,
+      rgba(234, 88, 12, 0.8) 250deg,
+      rgba(234, 88, 12, 0) 290deg,
+      rgba(234, 88, 12, 0) 360deg
+    );
+
+    /* Keep only the border ring */
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+
+    animation: pill-fire-rotate 2.2s linear infinite, pill-fire-flicker 900ms steps(2, end) infinite;
+  }
+
+  .pill-fire-border::after {
+    content: '';
+    position: absolute;
+    inset: -10px;
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.45;
+    filter: blur(0.2px);
+
+    /* Small spark bursts around the pill */
+    background:
+      radial-gradient(circle 2px at 12% 25%, rgba(234, 88, 12, 0.85) 0 60%, rgba(234, 88, 12, 0) 62%),
+      radial-gradient(circle 1.5px at 22% 80%, rgba(234, 88, 12, 0.75) 0 60%, rgba(234, 88, 12, 0) 62%),
+      radial-gradient(circle 2px at 50% 8%, rgba(234, 88, 12, 0.8) 0 60%, rgba(234, 88, 12, 0) 62%),
+      radial-gradient(circle 1.5px at 78% 22%, rgba(234, 88, 12, 0.75) 0 60%, rgba(234, 88, 12, 0) 62%),
+      radial-gradient(circle 2px at 88% 75%, rgba(234, 88, 12, 0.85) 0 60%, rgba(234, 88, 12, 0) 62%);
+
+    animation: pill-fire-sparks 1.2s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pill-fire-border::before,
+    .pill-fire-border::after {
+      animation: none;
+    }
+  }
+}
+
+@keyframes pill-fire-rotate {
+  to {
+    --pill-fire-angle: 360deg;
+  }
+}
+
+@keyframes pill-fire-flicker {
+  0% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes pill-fire-sparks {
+  0% {
+    transform: rotate(0deg) scale(1);
+    opacity: 0.35;
+  }
+  45% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: rotate(12deg) scale(1.02);
+    opacity: 0.4;
+  }
+}
+
 @layer base {
   * {
     @apply box-border;
