@@ -18,6 +18,7 @@ function AdminSidebar() {
     { path: '/admin/orders', label: 'Orders', icon: FiPackage },
     { path: '/admin/products', label: 'All Products', icon: FiList },
     { path: '/admin/products/add', label: 'Add Product', icon: FiPlus },
+    { path: '/admin/users', label: 'Users', icon: FiUser },
     { path: '/admin/settings/delivery', label: 'Delivery Settings', icon: FiList },
     { path: '/admin/messages', label: 'Customer Messages', icon: FiList },
     { path: '/admin/profile', label: 'Profile', icon: FiUser },

@@ -11,14 +11,18 @@ import {
   assignDeliveryBoyToOrder,
   generateDeliveryTrackingLink,
   getOrderTracking,
-  setOrderTrackingEnabled
+  setOrderTrackingEnabled,
+  getMyDeliveryOrders,
+  startDelivery,
+  markDeliveredByDeliveryBoy
 } from '../controllers/orderController.js';
-import { protect, admin } from '../middleware/authMiddleware.js';
+import { protect, admin, authorizeRoles } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 router.post('/', protect, createOrder);
 router.get('/myorders', protect, getMyOrders);
+router.get('/delivery/my-packages', protect, authorizeRoles('delivery_boy'), getMyDeliveryOrders);
 router.get('/latest', protect, admin, getLatestOrder);
 router.get('/:id/tracking', protect, getOrderTracking);
 router.get('/:id', protect, getOrderById);
@@ -28,5 +32,8 @@ router.put('/:id/status', protect, admin, updateOrderStatus);
 router.put('/:id/tracking', protect, admin, setOrderTrackingEnabled);
 router.put('/:id/assign-delivery', protect, admin, assignDeliveryBoyToOrder);
 router.post('/:id/tracking-link', protect, admin, generateDeliveryTrackingLink);
+
+router.put('/:id/start-delivery', protect, authorizeRoles('delivery_boy'), startDelivery);
+router.put('/:id/mark-delivered', protect, authorizeRoles('delivery_boy'), markDeliveredByDeliveryBoy);
 
 export default router;

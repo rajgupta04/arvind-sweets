@@ -1,20 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CircleMarker, MapContainer, Marker, Polyline, TileLayer, useMap } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import './deliveryBoyMarker.css';
-
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-
-// Fix default marker icon paths in bundlers.
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIcon2x,
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
-});
+import { resetGoogleMapsApiLoader, useGoogleMapsApi } from '../hooks/useGoogleMapsApi';
 
 function haversineMeters(a, b) {
   const toRad = (v) => (v * Math.PI) / 180;
@@ -47,6 +32,14 @@ function getStatusText(distanceMeters) {
   return 'Picked up';
 }
 
+function formatKm(distanceMeters) {
+  if (!Number.isFinite(distanceMeters) || distanceMeters < 0) return '—';
+  const km = distanceMeters / 1000;
+  if (km < 1) return `${Math.round(distanceMeters)} m`;
+  if (km < 10) return `${km.toFixed(2)} km`;
+  return `${km.toFixed(1)} km`;
+}
+
 function normalizeHeadingDeg(deg) {
   if (!Number.isFinite(deg)) return 0;
   let v = deg % 360;
@@ -63,68 +56,28 @@ function shortestAngleDelta(fromDeg, toDeg) {
   return d;
 }
 
-function bikeRiderSvgHtml() {
-  // HTML string for DivIcon. Keep it self-contained and lightweight.
-  return `
-    <div class="delivery-marker delivery-marker--stopped" style="--heading: 0deg">
-      <div class="delivery-marker__pulse"></div>
-      <div class="delivery-marker__body">
-        <div class="delivery-marker__rotate">
-          <svg class="delivery-marker__svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44" aria-hidden="true" focusable="false">
-            <circle class="marker-bg" cx="22" cy="22" r="20" />
-            <!-- wheels -->
-            <circle cx="14.5" cy="27.2" r="4.1" fill="none" stroke="#ffffff" stroke-width="2" />
-            <circle cx="29.7" cy="27.2" r="4.1" fill="none" stroke="#ffffff" stroke-width="2" />
-            <!-- frame -->
-            <path d="M18 18h6l3.2 6.6h-7.2l-2.2 3.4" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M22 18l-2 6.6" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
-            <path d="M28 18h3" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
-            <!-- rider -->
-            <circle cx="19.2" cy="14.8" r="2.3" fill="#ffffff" />
-            <path d="M19.2 17.2l2.3 2.1 2.4 0.6" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M20.2 19.2l-1.6 3.7" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
-          </svg>
-        </div>
-      </div>
-    </div>
-  `.trim();
+function svgToDataUrl(svg) {
+  const encoded = encodeURIComponent(svg)
+    .replace(/%0A/g, '')
+    .replace(/%20/g, ' ')
+    .replace(/%3D/g, '=')
+    .replace(/%3A/g, ':')
+    .replace(/%2F/g, '/')
+    .replace(/%22/g, "'");
+  return `data:image/svg+xml;charset=UTF-8,${encoded}`;
 }
 
-function makeDeliveryBoyDivIcon() {
-  return L.divIcon({
-    className: 'delivery-boy-div-icon',
-    html: bikeRiderSvgHtml(),
-    iconSize: [44, 44],
-    iconAnchor: [22, 22],
-  });
+function getShopLocationFromEnv() {
+  const latRaw = import.meta.env.VITE_SHOP_LAT;
+  const lngRaw = import.meta.env.VITE_SHOP_LNG;
+  const lat = typeof latRaw === 'string' ? Number(latRaw) : Number(latRaw);
+  const lng = typeof lngRaw === 'string' ? Number(lngRaw) : Number(lngRaw);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng };
 }
 
-function MapEffects({ deliveryPos, customerPos, followDelivery }) {
-  const map = useMap();
-  const fittedRef = useRef(false);
-
-  useEffect(() => {
-    if (!deliveryPos || !customerPos) return;
-    if (fittedRef.current) return;
-
-    const bounds = L.latLngBounds([
-      [deliveryPos.lat, deliveryPos.lng],
-      [customerPos.lat, customerPos.lng],
-    ]);
-
-    map.fitBounds(bounds.pad(0.25), { animate: true });
-    fittedRef.current = true;
-  }, [map, deliveryPos, customerPos]);
-
-  useEffect(() => {
-    if (!followDelivery) return;
-    if (!deliveryPos) return;
-    if (!fittedRef.current) return;
-
-    map.panTo([deliveryPos.lat, deliveryPos.lng], { animate: true });
-  }, [map, deliveryPos, followDelivery]);
-
-  return null;
+function easeInOutQuad(p) {
+  return p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
 }
 
 export default function LiveTrackingMap({
@@ -132,6 +85,26 @@ export default function LiveTrackingMap({
   customer,
   followDelivery = true,
 }) {
+  const [retryNonce, setRetryNonce] = useState(0);
+  const { google, isLoaded, error } = useGoogleMapsApi(retryNonce);
+
+  const containerRef = useRef(null);
+  const mapRef = useRef(null);
+  const shopMarkerRef = useRef(null);
+  const customerMarkerRef = useRef(null);
+  const deliveryMarkerRef = useRef(null);
+  const polylineRef = useRef(null);
+  const directionsServiceRef = useRef(null);
+  const lastRouteRequestAtRef = useRef(0);
+  const lastRouteEndpointsRef = useRef(null);
+  const pendingRouteEndpointsRef = useRef(null);
+  const routeTimerRef = useRef(null);
+  const lastDeliveryPosRef = useRef(null);
+  const deliveryAnimFrameRef = useRef(null);
+  const fitTimerRef = useRef(null);
+
+  const iconsRef = useRef(null);
+
   const deliveryPos = useMemo(() => {
     if (!delivery || typeof delivery.lat !== 'number' || typeof delivery.lng !== 'number') return null;
     return { lat: delivery.lat, lng: delivery.lng };
@@ -142,30 +115,23 @@ export default function LiveTrackingMap({
     return { lat: customer.lat, lng: customer.lng };
   }, [customer]);
 
-  const [animatedDeliveryPos, setAnimatedDeliveryPos] = useState(deliveryPos);
-  const animFrameRef = useRef(null);
-  const animStartRef = useRef(null);
-  const animFromRef = useRef(null);
-  const animToRef = useRef(null);
-  const deliveryBoyIcon = useMemo(() => makeDeliveryBoyDivIcon(), []);
-  const deliveryMarkerRef = useRef(null);
-
-  const [animatedHeading, setAnimatedHeading] = useState(0);
-  const headingAnimRef = useRef(null);
-  const headingFromRef = useRef(0);
-  const headingToRef = useRef(0);
-  const headingStartRef = useRef(null);
+  const shopPos = useMemo(() => getShopLocationFromEnv(), []);
 
   const lastTargetRef = useRef(null);
   const lastTargetTimeRef = useRef(null);
   const derivedSpeedRef = useRef(null);
 
+  const [uiDeliveryPos, setUiDeliveryPos] = useState(deliveryPos);
+  const [uiHeading, setUiHeading] = useState(0);
+  const [routeDistanceMeters, setRouteDistanceMeters] = useState(null);
+  const [routeEtaSeconds, setRouteEtaSeconds] = useState(null);
+  const headingAnimRef = useRef(null);
+  const headingFromRef = useRef(0);
+  const headingToRef = useRef(0);
+  const headingStartRef = useRef(null);
+
   useEffect(() => {
     if (!deliveryPos) return;
-    if (!animatedDeliveryPos) {
-      setAnimatedDeliveryPos(deliveryPos);
-      return;
-    }
 
     const prevTarget = lastTargetRef.current;
     const now = Date.now();
@@ -178,54 +144,20 @@ export default function LiveTrackingMap({
 
     lastTargetRef.current = deliveryPos;
     lastTargetTimeRef.current = now;
-
-    // Smoothly animate from current displayed position to new target.
-    const DURATION_MS = 900;
-    animFromRef.current = animatedDeliveryPos;
-    animToRef.current = deliveryPos;
-    animStartRef.current = performance.now();
-
-    const step = (t) => {
-      const start = animStartRef.current;
-      const from = animFromRef.current;
-      const to = animToRef.current;
-      if (!start || !from || !to) return;
-
-      const p = Math.min(1, (t - start) / DURATION_MS);
-      const ease = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
-      const lat = from.lat + (to.lat - from.lat) * ease;
-      const lng = from.lng + (to.lng - from.lng) * ease;
-      setAnimatedDeliveryPos({ lat, lng });
-
-      if (p < 1) {
-        animFrameRef.current = requestAnimationFrame(step);
-      }
-    };
-
-    try {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    } catch {}
-
-    animFrameRef.current = requestAnimationFrame(step);
-
-    return () => {
-      try {
-        if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-      } catch {}
-      animFrameRef.current = null;
-    };
   }, [deliveryPos?.lat, deliveryPos?.lng]);
 
   const center = useMemo(() => {
-    if (animatedDeliveryPos) return [animatedDeliveryPos.lat, animatedDeliveryPos.lng];
-    if (customerPos) return [customerPos.lat, customerPos.lng];
+    if (deliveryPos) return { lat: deliveryPos.lat, lng: deliveryPos.lng };
+    if (customerPos) return { lat: customerPos.lat, lng: customerPos.lng };
+    if (shopPos) return { lat: shopPos.lat, lng: shopPos.lng };
     return null;
-  }, [animatedDeliveryPos, customerPos]);
+  }, [deliveryPos, customerPos, shopPos]);
 
   const distanceMeters = useMemo(() => {
-    if (!animatedDeliveryPos || !customerPos) return null;
-    return haversineMeters(animatedDeliveryPos, customerPos);
-  }, [animatedDeliveryPos, customerPos]);
+    if (Number.isFinite(routeDistanceMeters) && routeDistanceMeters > 0) return routeDistanceMeters;
+    if (!deliveryPos || !customerPos) return null;
+    return haversineMeters(deliveryPos, customerPos);
+  }, [routeDistanceMeters, deliveryPos, customerPos]);
 
   const speedMps = useMemo(() => {
     const s = delivery?.speed;
@@ -247,15 +179,16 @@ export default function LiveTrackingMap({
   }, [speedMps]);
 
   const etaSeconds = useMemo(() => {
+    if (Number.isFinite(routeEtaSeconds) && routeEtaSeconds > 0) return routeEtaSeconds;
     if (!distanceMeters || !speedMps) return null;
     return distanceMeters / speedMps;
-  }, [distanceMeters, speedMps]);
+  }, [routeEtaSeconds, distanceMeters, speedMps]);
 
   // Smooth heading transitions (wrap-aware) with requestAnimationFrame.
   useEffect(() => {
     const DURATION_MS = 250;
 
-    const from = animatedHeading;
+    const from = uiHeading;
     const delta = shortestAngleDelta(from, headingDeg);
     const to = from + delta;
 
@@ -270,7 +203,7 @@ export default function LiveTrackingMap({
       // easeOutCubic
       const ease = 1 - Math.pow(1 - p, 3);
       const v = headingFromRef.current + (headingToRef.current - headingFromRef.current) * ease;
-      setAnimatedHeading(v);
+      setUiHeading(v);
       if (p < 1) {
         headingAnimRef.current = requestAnimationFrame(step);
       }
@@ -291,64 +224,404 @@ export default function LiveTrackingMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [headingDeg]);
 
-  // Apply moving/stopped state + heading rotation to the marker DOM for smooth CSS transitions.
-  useEffect(() => {
-    const marker = deliveryMarkerRef.current;
-    if (!marker) return;
-    const el = marker.getElement?.();
-    if (!el) return;
-    const root = el.querySelector?.('.delivery-marker');
-    if (!root) return;
+  const openInGoogleMapsUrl = useMemo(() => {
+    if (!deliveryPos || !customerPos) return null;
+    const origin = `${deliveryPos.lat},${deliveryPos.lng}`;
+    const dest = `${customerPos.lat},${customerPos.lng}`;
+    return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest)}&travelmode=driving`;
+  }, [deliveryPos, customerPos]);
 
-    root.style.setProperty('--heading', `${normalizeHeadingDeg(animatedHeading)}deg`);
-    root.classList.toggle('delivery-marker--moving', Boolean(isMoving));
-    root.classList.toggle('delivery-marker--stopped', !isMoving);
-  }, [animatedHeading, isMoving]);
+  useEffect(() => {
+    if (!deliveryPos) return;
+    setUiDeliveryPos(deliveryPos);
+  }, [deliveryPos?.lat, deliveryPos?.lng]);
+
+  useEffect(() => {
+    if (!isLoaded || !google) return;
+    if (!containerRef.current) return;
+    if (!center) return;
+    if (mapRef.current) return;
+
+    const map = new google.maps.Map(containerRef.current, {
+      center,
+      zoom: 16,
+      disableDefaultUI: true,
+      zoomControl: true,
+      clickableIcons: false,
+      gestureHandling: 'greedy',
+    });
+
+    mapRef.current = map;
+
+    try {
+      directionsServiceRef.current = new google.maps.DirectionsService();
+    } catch {
+      directionsServiceRef.current = null;
+    }
+
+    const bikeSvg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">
+        <circle cx="22" cy="22" r="20" fill="#111827" />
+        <circle cx="14.5" cy="27.2" r="4.1" fill="none" stroke="#ffffff" stroke-width="2" />
+        <circle cx="29.7" cy="27.2" r="4.1" fill="none" stroke="#ffffff" stroke-width="2" />
+        <path d="M18 18h6l3.2 6.6h-7.2l-2.2 3.4" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M22 18l-2 6.6" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+        <path d="M28 18h3" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="19.2" cy="14.8" r="2.3" fill="#ffffff" />
+        <path d="M19.2 17.2l2.3 2.1 2.4 0.6" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M20.2 19.2l-1.6 3.7" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
+      </svg>
+    `.trim();
+
+    const homeSvg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24">
+        <path fill="#2563eb" d="M12 3l9 8h-3v10h-5v-6H11v6H6V11H3z"/>
+      </svg>
+    `.trim();
+
+    const storeSvg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24">
+        <path fill="#f97316" d="M4 4h16l-1 5H5L4 4zm1 7h14v9H5v-9zm3 2v5h2v-5H8zm6 0v5h2v-5h-2z"/>
+      </svg>
+    `.trim();
+
+    iconsRef.current = {
+      delivery: {
+        url: svgToDataUrl(bikeSvg),
+        size: { w: 44, h: 44 },
+        anchor: { x: 22, y: 22 },
+      },
+      customer: {
+        url: svgToDataUrl(homeSvg),
+        size: { w: 40, h: 40 },
+        anchor: { x: 20, y: 36 },
+      },
+      shop: {
+        url: svgToDataUrl(storeSvg),
+        size: { w: 40, h: 40 },
+        anchor: { x: 20, y: 36 },
+      },
+    };
+
+    polylineRef.current = new google.maps.Polyline({
+      map,
+      geodesic: true,
+      strokeColor: '#111827',
+      strokeOpacity: 0.7,
+      strokeWeight: 4,
+    });
+  }, [google, isLoaded, center, retryNonce]);
+
+  useEffect(() => {
+    return () => {
+      try {
+        if (deliveryAnimFrameRef.current) cancelAnimationFrame(deliveryAnimFrameRef.current);
+      } catch {}
+      deliveryAnimFrameRef.current = null;
+      try {
+        if (fitTimerRef.current) clearTimeout(fitTimerRef.current);
+      } catch {}
+      fitTimerRef.current = null;
+      try {
+        if (routeTimerRef.current) clearTimeout(routeTimerRef.current);
+      } catch {}
+      routeTimerRef.current = null;
+    };
+  }, []);
+
+  const requestRoute = (origin, destination) => {
+    const map = mapRef.current;
+    const directionsService = directionsServiceRef.current;
+    const polyline = polylineRef.current;
+
+    if (!map || !polyline || !origin || !destination) return;
+
+    const applyFallback = () => {
+      try {
+        polyline.setPath([origin, destination]);
+      } catch {}
+      setRouteDistanceMeters(null);
+      setRouteEtaSeconds(null);
+    };
+
+    if (!directionsService) {
+      applyFallback();
+      return;
+    }
+
+    const last = lastRouteEndpointsRef.current;
+    const movedEnough =
+      !last ||
+      haversineMeters(last.origin, origin) > 30 ||
+      haversineMeters(last.destination, destination) > 30;
+
+    // Avoid hammering Directions API on frequent GPS updates.
+    const MIN_INTERVAL_MS = 12000;
+    const now = Date.now();
+    const since = now - (lastRouteRequestAtRef.current || 0);
+
+    pendingRouteEndpointsRef.current = { origin, destination };
+
+    if (!movedEnough) return;
+
+    if (since < MIN_INTERVAL_MS) {
+      const wait = MIN_INTERVAL_MS - since;
+      try {
+        if (routeTimerRef.current) clearTimeout(routeTimerRef.current);
+      } catch {}
+      routeTimerRef.current = setTimeout(() => {
+        const pending = pendingRouteEndpointsRef.current;
+        if (!pending) return;
+        requestRoute(pending.origin, pending.destination);
+      }, wait);
+      return;
+    }
+
+    lastRouteRequestAtRef.current = now;
+    lastRouteEndpointsRef.current = { origin, destination };
+
+    try {
+      directionsService.route(
+        {
+          origin,
+          destination,
+          travelMode: google.maps.TravelMode.DRIVING,
+          provideRouteAlternatives: false,
+        },
+        (result, status) => {
+          if (status !== 'OK' || !result?.routes?.length) {
+            applyFallback();
+            return;
+          }
+
+          const route = result.routes[0];
+          const path = route.overview_path;
+          if (Array.isArray(path) && path.length) {
+            try {
+              polyline.setPath(path);
+            } catch {
+              applyFallback();
+            }
+          } else {
+            applyFallback();
+          }
+
+          const leg = route.legs?.[0];
+          const dist = leg?.distance?.value;
+          const dur = leg?.duration?.value;
+          setRouteDistanceMeters(typeof dist === 'number' && Number.isFinite(dist) ? dist : null);
+          setRouteEtaSeconds(typeof dur === 'number' && Number.isFinite(dur) ? dur : null);
+        }
+      );
+    } catch {
+      applyFallback();
+    }
+  };
+
+  useEffect(() => {
+    if (!isLoaded || !google) return;
+    if (!mapRef.current) return;
+
+    const map = mapRef.current;
+    const icons = iconsRef.current;
+
+    const ensureMarker = (ref, pos, iconKey) => {
+      if (!pos) {
+        if (ref.current) {
+          ref.current.setMap(null);
+          ref.current = null;
+        }
+        return;
+      }
+
+      if (!ref.current) {
+        const iconDef = icons?.[iconKey];
+        ref.current = new google.maps.Marker({
+          position: pos,
+          map,
+          icon: iconDef
+            ? {
+                url: iconDef.url,
+                scaledSize: new google.maps.Size(iconDef.size.w, iconDef.size.h),
+                anchor: new google.maps.Point(iconDef.anchor.x, iconDef.anchor.y),
+              }
+            : undefined,
+          optimized: true,
+        });
+      } else {
+        ref.current.setPosition(pos);
+      }
+    };
+
+    ensureMarker(shopMarkerRef, shopPos, 'shop');
+    ensureMarker(customerMarkerRef, customerPos, 'customer');
+
+    // Delivery marker: smooth animation between updates.
+    if (!deliveryPos) {
+      if (deliveryMarkerRef.current) {
+        deliveryMarkerRef.current.setMap(null);
+        deliveryMarkerRef.current = null;
+      }
+      lastDeliveryPosRef.current = null;
+    } else {
+      if (!deliveryMarkerRef.current) {
+        ensureMarker(deliveryMarkerRef, deliveryPos, 'delivery');
+        lastDeliveryPosRef.current = deliveryPos;
+        setUiDeliveryPos(deliveryPos);
+      } else {
+        const from = lastDeliveryPosRef.current || deliveryPos;
+        const to = deliveryPos;
+        lastDeliveryPosRef.current = to;
+
+        const DURATION_MS = 900;
+        const start = performance.now();
+
+        try {
+          if (deliveryAnimFrameRef.current) cancelAnimationFrame(deliveryAnimFrameRef.current);
+        } catch {}
+
+        const step = (t) => {
+          const p = Math.min(1, (t - start) / DURATION_MS);
+          const e = easeInOutQuad(p);
+          const lat = from.lat + (to.lat - from.lat) * e;
+          const lng = from.lng + (to.lng - from.lng) * e;
+          const pos = { lat, lng };
+
+          deliveryMarkerRef.current?.setPosition(pos);
+
+          if (p < 1) {
+            deliveryAnimFrameRef.current = requestAnimationFrame(step);
+          }
+        };
+
+        deliveryAnimFrameRef.current = requestAnimationFrame(step);
+      }
+    }
+
+    // Route polyline: road-following route (Directions). Fallbacks to straight line.
+    const origin = deliveryPos || shopPos;
+    const destination = customerPos;
+    if (origin && destination) {
+      requestRoute(origin, destination);
+    } else {
+      polylineRef.current?.setPath([]);
+      setRouteDistanceMeters(null);
+      setRouteEtaSeconds(null);
+    }
+
+    // Follow delivery (pan) without re-fitting constantly.
+    if (followDelivery && deliveryPos) {
+      map.panTo(deliveryPos);
+    }
+
+    // Fit bounds when markers change; avoid jitter on frequent delivery updates.
+    try {
+      if (fitTimerRef.current) clearTimeout(fitTimerRef.current);
+    } catch {}
+
+    fitTimerRef.current = setTimeout(() => {
+      const pts = [shopPos, deliveryPos, customerPos].filter(Boolean);
+      if (!pts.length) return;
+
+      const bounds = new google.maps.LatLngBounds();
+      pts.forEach((p) => bounds.extend(p));
+
+      const current = map.getBounds?.();
+      if (current && deliveryPos && current.contains(deliveryPos)) {
+        // Only re-fit if a static marker changed or if delivery escaped the viewport.
+        if (!current.contains(customerPos || deliveryPos) || !current.contains(shopPos || deliveryPos)) {
+          map.fitBounds(bounds, 64);
+        }
+        return;
+      }
+
+      map.fitBounds(bounds, 64);
+    }, 180);
+  }, [google, isLoaded, shopPos, customerPos?.lat, customerPos?.lng, deliveryPos?.lat, deliveryPos?.lng, followDelivery, retryNonce]);
 
   if (!center) return null;
 
+  if (error) {
+    return (
+      <div className="w-full h-80 rounded-xl overflow-hidden border relative flex items-center justify-center bg-gray-50">
+        <div className="px-4 text-center space-y-2">
+          <div className="font-semibold text-gray-900">Map failed to load</div>
+          <div className="text-sm text-gray-600">{String(error?.message || error)}</div>
+          <button
+            type="button"
+            onClick={() => {
+              resetGoogleMapsApiLoader();
+              setRetryNonce((n) => n + 1);
+            }}
+            className="inline-flex items-center justify-center rounded-md border bg-white px-3 py-2 text-sm text-gray-900 hover:bg-gray-50"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isLoaded) {
+    return (
+      <div className="w-full h-80 rounded-xl overflow-hidden border relative flex items-center justify-center bg-gray-50">
+        <div className="text-sm text-gray-600">Loading map…</div>
+      </div>
+    );
+  }
+
+  const canCenterOnDelivery = Boolean(mapRef.current && uiDeliveryPos && typeof uiDeliveryPos.lat === 'number' && typeof uiDeliveryPos.lng === 'number');
+  const centerOnDelivery = () => {
+    const map = mapRef.current;
+    const pos = uiDeliveryPos;
+    if (!map || !pos) return;
+
+    const accuracy = typeof delivery?.accuracy === 'number' && Number.isFinite(delivery.accuracy) ? delivery.accuracy : null;
+    const targetZoom = accuracy != null ? (accuracy <= 20 ? 18 : accuracy <= 80 ? 17 : 16) : 17;
+
+    try {
+      map.panTo(pos);
+    } catch {
+      try {
+        map.setCenter(pos);
+      } catch {}
+    }
+
+    try {
+      map.setZoom(targetZoom);
+    } catch {}
+  };
+
   return (
     <div className="w-full h-80 rounded-xl overflow-hidden border relative">
-      <div className="absolute z-[500] top-3 left-3 bg-white/95 backdrop-blur rounded-lg border px-3 py-2 text-xs text-gray-800 space-y-1">
+      <div className="absolute z-[2] top-3 left-3 bg-white/95 backdrop-blur rounded-lg border px-3 py-2 text-xs text-gray-800 space-y-1">
         <div className="font-semibold">Live Tracking</div>
         <div>ETA: {etaSeconds ? formatEta(etaSeconds) : '—'}</div>
+        <div>KM left: {distanceMeters != null ? formatKm(distanceMeters) : '—'}</div>
         <div>Status: {distanceMeters != null ? getStatusText(distanceMeters) : '—'}</div>
+        {openInGoogleMapsUrl && (
+          <a
+            href={openInGoogleMapsUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center justify-center rounded-md border bg-white px-2 py-1 text-xs text-gray-900 hover:bg-gray-50"
+          >
+            Open in Google Maps
+          </a>
+        )}
+
+        <button
+          type="button"
+          onClick={centerOnDelivery}
+          disabled={!canCenterOnDelivery}
+          className="inline-flex items-center justify-center rounded-md border bg-white px-2 py-1 text-xs text-gray-900 hover:bg-gray-50 disabled:opacity-60"
+          title={canCenterOnDelivery ? 'Center map on current location' : 'Location not available yet'}
+        >
+          Current location
+        </button>
       </div>
 
-      <MapContainer center={center} zoom={16} scrollWheelZoom={false} className="w-full h-full">
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-
-        <MapEffects deliveryPos={deliveryPos} customerPos={customerPos} followDelivery={followDelivery} />
-
-        {customerPos && (
-          <CircleMarker
-            center={[customerPos.lat, customerPos.lng]}
-            radius={8}
-            pathOptions={{ color: '#2563eb', fillColor: '#3b82f6', fillOpacity: 0.9 }}
-          />
-        )}
-
-        {animatedDeliveryPos && (
-          <Marker
-            position={[animatedDeliveryPos.lat, animatedDeliveryPos.lng]}
-            icon={deliveryBoyIcon}
-            ref={deliveryMarkerRef}
-          />
-        )}
-
-        {animatedDeliveryPos && customerPos && (
-          <Polyline
-            positions={[
-              [animatedDeliveryPos.lat, animatedDeliveryPos.lng],
-              [customerPos.lat, customerPos.lng],
-            ]}
-            pathOptions={{ color: '#111827', weight: 4, opacity: 0.7 }}
-          />
-        )}
-      </MapContainer>
+      <div ref={containerRef} className="w-full h-full" />
     </div>
   );
 }

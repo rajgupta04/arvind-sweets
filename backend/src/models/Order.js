@@ -77,7 +77,15 @@ const orderSchema = new mongoose.Schema({
   },
   assignedDeliveryBoy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'DeliveryBoy',
+    ref: 'User',
+    default: null
+  },
+  assignedAt: {
+    type: Date,
+    default: null
+  },
+  deliveryStartedAt: {
+    type: Date,
     default: null
   },
   liveTrackingEnabled: {
@@ -93,6 +101,12 @@ const orderSchema = new mongoose.Schema({
     default: null
   },
   lastDeliveryLocation: {
+    lat: Number,
+    lng: Number,
+    updatedAt: Date
+  },
+  // New name (kept in sync with lastDeliveryLocation)
+  lastKnownLocation: {
     lat: Number,
     lng: Number,
     updatedAt: Date

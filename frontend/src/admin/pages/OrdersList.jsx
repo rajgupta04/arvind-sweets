@@ -5,10 +5,9 @@ import AdminSidebar from '../components/AdminSidebar';
 import AdminNavbar from '../components/AdminNavbar';
 import {
   assignDeliveryBoyToOrder,
-  createDeliveryBoy,
   getAllOrders,
   generateDeliveryTrackingLink,
-  listDeliveryBoys,
+  listDeliveryBoyUsers,
   setOrderTrackingEnabled,
   updateOrderStatus,
 } from '../services/adminApi';
@@ -34,9 +33,6 @@ function OrdersList() {
   const [assigningDelivery, setAssigningDelivery] = useState(false);
   const [selectedDeliveryBoyId, setSelectedDeliveryBoyId] = useState('');
   const [liveTrackingEnabled, setLiveTrackingEnabled] = useState(false);
-  const [newDeliveryBoyName, setNewDeliveryBoyName] = useState('');
-  const [newDeliveryBoyPhone, setNewDeliveryBoyPhone] = useState('');
-  const [creatingDeliveryBoy, setCreatingDeliveryBoy] = useState(false);
   const [liveLocation, setLiveLocation] = useState(null);
   const [trackingActive, setTrackingActive] = useState(false);
   const [trackingMessage, setTrackingMessage] = useState('');
@@ -156,7 +152,7 @@ function OrdersList() {
   const fetchDeliveryBoys = async () => {
     setDeliveryBoysLoading(true);
     try {
-      const data = await listDeliveryBoys();
+      const data = await listDeliveryBoyUsers();
       setDeliveryBoys(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Failed to load delivery boys', error);
@@ -347,28 +343,6 @@ function OrdersList() {
       setLiveTrackingEnabled(Boolean(selectedOrder?.liveTrackingEnabled));
     } finally {
       setTogglingTracking(false);
-    }
-  };
-
-  const handleCreateDeliveryBoy = async () => {
-    const name = newDeliveryBoyName.trim();
-    const phone = newDeliveryBoyPhone.trim();
-    if (!name || !phone) {
-      alert('Name and phone are required');
-      return;
-    }
-    try {
-      setCreatingDeliveryBoy(true);
-      await createDeliveryBoy({ name, phone, isActive: true });
-      setNewDeliveryBoyName('');
-      setNewDeliveryBoyPhone('');
-      await fetchDeliveryBoys();
-      showToast('Delivery boy created');
-    } catch (error) {
-      console.error('Failed to create delivery boy', error);
-      alert(error?.response?.data?.message || 'Failed to create delivery boy');
-    } finally {
-      setCreatingDeliveryBoy(false);
     }
   };
 
@@ -620,7 +594,7 @@ function OrdersList() {
                       <option value="">Unassigned</option>
                       {deliveryBoys.map((db) => (
                         <option key={db._id} value={db._id}>
-                          {db.name} ({db.phone}){db.isActive === false ? ' - inactive' : ''}
+                          {db.name}{db.phone ? ` (${db.phone})` : ''}
                         </option>
                       ))}
                     </select>
@@ -675,32 +649,6 @@ function OrdersList() {
                   </div>
                 </div>
 
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h5 className="text-sm font-semibold text-gray-800 mb-3">Add delivery boy</h5>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <input
-                      value={newDeliveryBoyName}
-                      onChange={(e) => setNewDeliveryBoyName(e.target.value)}
-                      placeholder="Name"
-                      className="border rounded-lg px-3 py-2 text-sm"
-                    />
-                    <input
-                      value={newDeliveryBoyPhone}
-                      onChange={(e) => setNewDeliveryBoyPhone(e.target.value)}
-                      placeholder="Phone"
-                      className="border rounded-lg px-3 py-2 text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleCreateDeliveryBoy}
-                      className="border rounded-lg px-3 py-2 text-sm hover:bg-white disabled:opacity-60"
-                      disabled={creatingDeliveryBoy}
-                    >
-                      {creatingDeliveryBoy ? 'Creating...' : 'Create'}
-                    </button>
-                  </div>
-                </div>
-
                 {selectedOrder?.lastDeliveryLocation?.lat && (
                   <div className="text-sm text-gray-600">
                     Last location: {selectedOrder.lastDeliveryLocation.lat}, {selectedOrder.lastDeliveryLocation.lng}
@@ -718,13 +666,6 @@ function OrdersList() {
                   </div>
 
                   {trackingMessage && <div className="text-gray-600">{trackingMessage}</div>}
-
-                  <div className="text-gray-700">
-                    <span className="font-semibold">Coords:</span>{' '}
-                    {liveLocation
-                      ? `${liveLocation.lat}, ${liveLocation.lng}`
-                      : '—'}
-                  </div>
                   <div className="text-gray-700">
                     <span className="font-semibold">Last update:</span>{' '}
                     {liveLocation?.updatedAt

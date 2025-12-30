@@ -6,6 +6,7 @@ import { AuthProvider } from './context/AuthContext';
 import PublicLayout from './components/PublicLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
+import DeliveryBoyRoute from './components/DeliveryBoyRoute';
 
 // Pages
 import Home from './pages/Home';
@@ -21,11 +22,14 @@ import OrderDetails from './pages/OrderDetails';
 import OrderSuccess from './pages/OrderSuccess';
 import OAuthSuccess from './pages/OAuthSuccess';
 import DeliveryTracker from './pages/DeliveryTracker';
+import DeliveryMyPackages from './pages/DeliveryMyPackages';
+import DeliveryOrderDetails from './pages/DeliveryOrderDetails';
 
 // Admin Pages
 import AdminDashboard from './admin/pages/AdminDashboard';
 import ProductsList from './admin/pages/ProductsList';
 import OrdersList from './admin/pages/OrdersList';
+import UsersList from './admin/pages/UsersList';
 import AddProduct from './admin/pages/AddProduct';
 import EditProduct from './admin/pages/EditProduct';
 import AdminProfile from './admin/pages/AdminProfile';
@@ -50,6 +54,7 @@ function App() {
             <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
             <Route path="/admin/products" element={<AdminRoute><ProductsList /></AdminRoute>} />
             <Route path="/admin/orders" element={<AdminRoute><OrdersList /></AdminRoute>} />
+            <Route path="/admin/users" element={<AdminRoute><UsersList /></AdminRoute>} />
             <Route path="/admin/messages" element={<AdminRoute><AdminMessages /></AdminRoute>} />
             <Route path="/admin/products/add" element={<AdminRoute><AddProduct /></AdminRoute>} />
             <Route path="/admin/products/edit/:id" element={<AdminRoute><EditProduct /></AdminRoute>} />
@@ -58,6 +63,8 @@ function App() {
 
             {/* Delivery Boy Tracking - No Navbar/Footer */}
             <Route path="/delivery/track" element={<DeliveryTracker />} />
+            <Route path="/delivery/my-packages" element={<DeliveryBoyRoute><DeliveryMyPackages /></DeliveryBoyRoute>} />
+            <Route path="/delivery/orders/:id" element={<DeliveryBoyRoute><DeliveryOrderDetails /></DeliveryBoyRoute>} />
 
             {/* Public Routes - With Navbar/Footer */}
             <Route element={<PublicLayout />}>

@@ -46,6 +46,11 @@ function Navbar() {
                 My Orders
               </Link>
             )}
+            {user?.role === 'delivery_boy' && (
+              <Link to="/delivery/my-packages" className="text-gray-700 hover:text-orange-600 transition">
+                My Packages
+              </Link>
+            )}
 
             <Link to="/cart" className="relative">
               <FiShoppingCart className="w-6 h-6 text-gray-700 hover:text-orange-600" />
@@ -103,6 +108,16 @@ function Navbar() {
                     >
                       My Orders
                     </Link>
+
+                    {user.role === 'delivery_boy' && (
+                      <Link
+                        to="/delivery/my-packages"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="block px-4 py-2 text-gray-700 hover:bg-gray-100"
+                      >
+                        My Packages
+                      </Link>
+                    )}
                   </div>
                 )}
               </div>
@@ -151,6 +166,11 @@ function Navbar() {
                   <Link to="/profile" className="block text-gray-700 hover:text-orange-600">My Profile</Link>
                 )}
                 <Link to="/orders" className="block text-gray-700 hover:text-orange-600">My Orders</Link>
+                {user.role === 'delivery_boy' && (
+                  <Link to="/delivery/my-packages" className="block text-gray-700 hover:text-orange-600">
+                    My Packages
+                  </Link>
+                )}
               </>
             ) : (
               <Link to="/login" className="block text-gray-700 hover:text-orange-600">Login</Link>

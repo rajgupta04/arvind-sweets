@@ -76,8 +76,50 @@ export const generateDeliveryTrackingLink = async (orderId, { deliveryBoyId } = 
 };
 
 // ---------------------------
+// Users (Admin)
+// ---------------------------
+
+export const listUsers = async () => {
+  const response = await API.get('/users');
+  return response.data;
+};
+
+export const createUser = async ({ name, email, phone, role, password } = {}) => {
+  const response = await API.post('/users', {
+    name,
+    email,
+    phone,
+    role,
+    password,
+  });
+  return response.data;
+};
+
+export const updateUser = async (id, { name, email, phone, role, password } = {}) => {
+  const response = await API.put(`/users/${id}`, {
+    name,
+    email,
+    phone,
+    role,
+    password,
+  });
+  return response.data;
+};
+
+export const deleteUser = async (id) => {
+  const response = await API.delete(`/users/${id}`);
+  return response.data;
+};
+
+// ---------------------------
 // Delivery Boys
 // ---------------------------
+
+// New (role-based): delivery boys are normal users with role=delivery_boy
+export const listDeliveryBoyUsers = async () => {
+  const response = await API.get('/users/delivery-boys');
+  return response.data;
+};
 
 export const listDeliveryBoys = async ({ isActive } = {}) => {
   const response = await API.get('/delivery-boys', {

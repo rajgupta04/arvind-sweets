@@ -36,7 +36,7 @@ export const registerUser = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        token: generateToken(user._id)
+        token: generateToken(user)
       });
     } else {
       res.status(400).json({ message: 'Invalid user data' });
@@ -69,7 +69,7 @@ export const loginUser = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        token: generateToken(user._id)
+        token: generateToken(user)
       });
     } else {
       res.status(401).json({ message: 'Invalid email or password' });
@@ -131,6 +131,113 @@ export const updateUserProfile = async (req, res) => {
 export const getUsers = async (req, res) => {
   try {
     const users = await User.find({}).select('-password');
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get user by id (Admin)
+// @route   GET /api/users/:id
+// @access  Private/Admin
+export const getUserById = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select('-password');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Create user (Admin)
+// @route   POST /api/users
+// @access  Private/Admin
+export const createUserByAdmin = async (req, res) => {
+  try {
+    const { name, email, password, phone, role } = req.body || {};
+
+    if (!name || !email) {
+      return res.status(400).json({ message: 'name and email are required' });
+    }
+
+    const existing = await User.findOne({ email: String(email).toLowerCase().trim() });
+    if (existing) {
+      return res.status(400).json({ message: 'Email already in use' });
+    }
+
+    const user = await User.create({
+      name: String(name).trim(),
+      email: String(email).toLowerCase().trim(),
+      password: password ? String(password) : undefined,
+      phone: phone ? String(phone).trim() : undefined,
+      role: role || undefined,
+    });
+
+    const safe = await User.findById(user._id).select('-password');
+    res.status(201).json(safe);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Update user (Admin)
+// @route   PUT /api/users/:id
+// @access  Private/Admin
+export const updateUserByAdmin = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const { name, email, phone, role, password } = req.body || {};
+
+    if (email && String(email).toLowerCase().trim() !== String(user.email).toLowerCase()) {
+      const existing = await User.findOne({ email: String(email).toLowerCase().trim() });
+      if (existing && String(existing._id) !== String(user._id)) {
+        return res.status(400).json({ message: 'Email already in use' });
+      }
+      user.email = String(email).toLowerCase().trim();
+    }
+
+    if (name !== undefined) user.name = String(name).trim();
+    if (phone !== undefined) user.phone = phone ? String(phone).trim() : '';
+    if (role !== undefined) user.role = role;
+    if (password !== undefined && String(password).trim() !== '') {
+      user.password = String(password);
+      user.isGoogleUser = false;
+    }
+
+    const updated = await user.save();
+    const safe = await User.findById(updated._id).select('-password');
+    res.json(safe);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Delete user (Admin)
+// @route   DELETE /api/users/:id
+// @access  Private/Admin
+export const deleteUserByAdmin = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    await user.deleteOne();
+    res.json({ message: 'User removed' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get delivery boy users (Admin)
+// @route   GET /api/users/delivery-boys
+// @access  Private/Admin
+export const getDeliveryBoyUsers = async (req, res) => {
+  try {
+    const users = await User.find({ role: 'delivery_boy' })
+      .select('_id name email phone role')
+      .sort({ name: 1 });
     res.json(users);
   } catch (error) {
     res.status(500).json({ message: error.message });

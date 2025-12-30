@@ -2,6 +2,37 @@
 
 Frontend application for Arvind Sweets.
 
+## Google Maps (Live Tracking)
+
+The live tracking map uses the **Google Maps JavaScript API** (client-side only, React + Vite).
+
+### Setup
+
+- Create a Google Cloud project
+- Enable **Maps JavaScript API**
+- Create an **API key** and restrict it:
+	- Application restriction: **HTTP referrers (web sites)**
+	- Add dev + prod domains (examples):
+		- `http://localhost:5173/*`
+		- `https://your-domain.com/*`
+
+Add these env vars in [frontend/.env](frontend/.env) (or `.env.development` / `.env.production`):
+
+- `VITE_GOOGLE_MAPS_API_KEY=...`
+- `VITE_SHOP_LAT=...`
+- `VITE_SHOP_LNG=...`
+
+Then restart the dev server.
+
+### What the map shows
+
+- Shop marker
+- Delivery boy marker (updates via socket)
+- Customer marker (shipping address)
+- A polyline path: Shop → Delivery Boy → Customer
+
+If Google Maps fails to load (network / key restriction / billing), the UI shows an error and a Retry button.
+
 ## Cloudinary image optimization
 
 This frontend **does not render raw Cloudinary URLs directly**. It transforms delivery URLs to ensure fast formats and reasonable sizes.

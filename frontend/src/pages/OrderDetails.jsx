@@ -254,10 +254,6 @@ export default function OrderDetails() {
               </div>
             )}
             <div className="text-gray-700">
-              <span className="font-semibold">Coords:</span>{' '}
-              {displayLocation ? `${displayLocation.lat}, ${displayLocation.lng}` : '—'}
-            </div>
-            <div className="text-gray-700">
               <span className="font-semibold">Last update:</span>{' '}
               {displayLocation?.updatedAt ? new Date(displayLocation.updatedAt).toLocaleString() : '—'}
             </div>

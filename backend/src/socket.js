@@ -2,6 +2,7 @@ import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import Order from './models/Order.js';
 import DeliveryBoy from './models/DeliveryBoy.js';
+import User from './models/User.js';
 import { trackingStore } from './utils/trackingStore.js';
 
 function parseAllowedOrigins() {
@@ -73,18 +74,37 @@ export function initSocket(httpServer, { app } = {}) {
     },
   });
 
-  io.on('connection', (socket) => {
+  io.on('connection', async (socket) => {
     // Optional: authenticate via handshake
     const bearer = socket.handshake.headers?.authorization;
     const headerToken = bearer && bearer.startsWith('Bearer ') ? bearer.slice('Bearer '.length) : null;
     const handshakeToken = socket.handshake.auth?.token || socket.handshake.query?.token || headerToken;
 
+    const applyDecodedUser = async (decoded) => {
+      if (!decoded) return;
+
+      const id = decoded.userId || decoded.id || decoded._id;
+      const role = decoded.role;
+      if (!id) return;
+
+      // Hydrate role for legacy tokens that didn't include it.
+      if (!role) {
+        try {
+          const u = await User.findById(id).select('role').lean();
+          socket.data.user = { id: String(id), role: u?.role };
+          return;
+        } catch {
+          socket.data.user = { id: String(id), role: undefined };
+          return;
+        }
+      }
+
+      socket.data.user = { id: String(id), role };
+    };
+
     const decoded = tryVerifyJwt(handshakeToken);
     if (decoded) {
-      socket.data.user = {
-        id: decoded.id || decoded._id,
-        role: decoded.role,
-      };
+      await applyDecodedUser(decoded);
 
       // If this is a delivery tracking token, mark as delivery boy session and join order room immediately.
       if (decoded.type === 'delivery_tracking' && decoded.deliveryBoyId && decoded.orderId) {
@@ -98,16 +118,14 @@ export function initSocket(httpServer, { app } = {}) {
       }
     }
 
-    socket.on('authUser', ({ token } = {}, ack) => {
+    socket.on('authUser', async ({ token } = {}, ack) => {
       const nextDecoded = tryVerifyJwt(token);
       if (!nextDecoded) {
         ack?.({ ok: false, reason: 'invalid_token' });
         return;
       }
-      socket.data.user = {
-        id: nextDecoded.id || nextDecoded._id,
-        role: nextDecoded.role,
-      };
+
+      await applyDecodedUser(nextDecoded);
       ack?.({ ok: true });
     });
 
@@ -133,16 +151,31 @@ export function initSocket(httpServer, { app } = {}) {
         return;
       }
 
-      const deliveryBoy = await DeliveryBoy.findById(decoded.deliveryBoyId);
-      if (!deliveryBoy) {
+      // Migration: accept deliveryBoyId as either
+      // - a User with role=delivery_boy (new)
+      // - a legacy DeliveryBoy document (old)
+      const [deliveryUser, legacyDeliveryBoy] = await Promise.all([
+        User.findById(decoded.deliveryBoyId).select('_id role').catch(() => null),
+        DeliveryBoy.findById(decoded.deliveryBoyId).catch(() => null),
+      ]);
+
+      if (deliveryUser) {
+        if (deliveryUser.role !== 'delivery_boy') {
+          ack?.({ ok: false, reason: 'not_delivery_boy_role' });
+          return;
+        }
+      } else if (!legacyDeliveryBoy) {
         ack?.({ ok: false, reason: 'invalid_delivery_boy' });
         return;
       }
 
-      socket.data.deliveryBoyId = String(deliveryBoy._id);
+      socket.data.deliveryBoyId = String(decoded.deliveryBoyId);
       socket.data.deliveryOrderId = String(decoded.orderId);
-      deliveryBoy.socketId = socket.id;
-      await deliveryBoy.save();
+
+      if (legacyDeliveryBoy) {
+        legacyDeliveryBoy.socketId = socket.id;
+        await legacyDeliveryBoy.save().catch(() => {});
+      }
 
       // Spec: when delivery boy connects, join room order:<orderId>
       const room = getOrderRoom(decoded.orderId);
@@ -211,8 +244,18 @@ export function initSocket(httpServer, { app } = {}) {
         const order = await Order.findById(orderId);
         if (!order) return ack?.({ ok: false, reason: 'order_not_found' });
 
-        const deliveryBoyId = socket.data.deliveryBoyId;
-        if (!deliveryBoyId || !order.assignedDeliveryBoy || String(order.assignedDeliveryBoy) !== String(deliveryBoyId)) {
+        // Authorization: support both
+        // 1) legacy delivery_tracking token flow (socket.data.deliveryBoyId)
+        // 2) normal app JWT with role=delivery_boy (socket.data.user)
+        const legacyDeliveryBoyId = socket.data.deliveryBoyId;
+        const user = socket.data.user;
+
+        const assignedId = order.assignedDeliveryBoy ? String(order.assignedDeliveryBoy) : null;
+        const isLegacyAssigned = legacyDeliveryBoyId && assignedId && assignedId === String(legacyDeliveryBoyId);
+        const isUserAssigned =
+          user?.role === 'delivery_boy' && user?.id && assignedId && assignedId === String(user.id);
+
+        if (!isLegacyAssigned && !isUserAssigned) {
           return ack?.({ ok: false, reason: 'not_authorized' });
         }
 
@@ -240,12 +283,19 @@ export function initSocket(httpServer, { app } = {}) {
         });
 
         // Optional: keep DB fields in sync for admin views / history
-        order.lastDeliveryLocation = { lat, lng, updatedAt: now };
+        const loc = { lat, lng, updatedAt: now };
+        order.lastDeliveryLocation = loc;
+        if (order.lastKnownLocation !== undefined) {
+          order.lastKnownLocation = loc;
+        }
         await order.save();
 
-        await DeliveryBoy.findByIdAndUpdate(deliveryBoyId, {
-          currentLocation: { lat, lng, updatedAt: now },
-        }).catch(() => {});
+        // Best-effort: keep legacy DeliveryBoy location updated if using tracking token
+        if (legacyDeliveryBoyId) {
+          await DeliveryBoy.findByIdAndUpdate(legacyDeliveryBoyId, {
+            currentLocation: { lat, lng, updatedAt: now },
+          }).catch(() => {});
+        }
 
         const room = getOrderRoom(orderId);
         const legacyRoom = getLegacyOrderRoom(orderId);
