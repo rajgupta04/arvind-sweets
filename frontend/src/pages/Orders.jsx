@@ -137,7 +137,19 @@ export default function MyOrders() {
 
             return (
               <div key={order._id} className="bg-white border rounded-2xl shadow-sm overflow-hidden">
-                <div className="p-4">
+                <div
+                  className="p-4 cursor-pointer"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(`/orders/${order._id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      navigate(`/orders/${order._id}`);
+                    }
+                  }}
+                  aria-label="View order details"
+                >
                   <div className="flex items-start gap-3">
                     <div
                       className={

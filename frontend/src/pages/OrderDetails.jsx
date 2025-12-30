@@ -208,9 +208,18 @@ export default function OrderDetails() {
   };
 
   if (authLoading) return <Loader />;
-  if (!order) return null;
+  if (loading || !order) return <Loader />;
 
   const shipping = order.shippingAddress || {};
+
+  const shopLocation = (() => {
+    const latRaw = import.meta.env.VITE_SHOP_LAT;
+    const lngRaw = import.meta.env.VITE_SHOP_LNG;
+    const lat = typeof latRaw === 'string' ? Number(latRaw) : Number(latRaw);
+    const lng = typeof lngRaw === 'string' ? Number(lngRaw) : Number(lngRaw);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { lat, lng };
+  })();
 
   const customerLocation =
     shipping?.location && typeof shipping.location.lat === 'number' && typeof shipping.location.lng === 'number'
@@ -229,6 +238,20 @@ export default function OrderDetails() {
     : null;
 
   const displayLocation = liveLocation || initialLocation;
+
+  const mapDeliveryLocation = (() => {
+    if (order?.liveTrackingEnabled && displayLocation?.lat && displayLocation?.lng) {
+      return {
+        lat: displayLocation.lat,
+        lng: displayLocation.lng,
+        speed: liveLocation?.speed,
+        heading: liveLocation?.heading,
+        accuracy: liveLocation?.accuracy,
+        updatedAt: displayLocation?.updatedAt,
+      };
+    }
+    return shopLocation;
+  })();
 
   // ETA extraction
   const etaDate = order?.estimatedDelivery ? new Date(order.estimatedDelivery) : null;
@@ -328,12 +351,12 @@ export default function OrderDetails() {
         </div>
       ) : null}
 
-      {(order.orderStatus === 'Out for Delivery' || order.liveTrackingEnabled) && (
+      {order?.deliveryType === 'Delivery' && (
         <div className="bg-white rounded-xl shadow p-6 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Live Tracking</h2>
             <span className="text-sm text-gray-600">
-              {order.liveTrackingEnabled ? (trackingActive ? 'Active' : 'Unavailable') : 'Not enabled'}
+              {trackingActive ? 'Active' : (order.orderStatus === 'Out for Delivery' && order.liveTrackingEnabled ? 'Unavailable' : 'At shop')}
             </span>
           </div>
 
@@ -352,26 +375,14 @@ export default function OrderDetails() {
             </div>
           </div>
 
-          {order.liveTrackingEnabled ? (
-            displayLocation ? (
-              <>
-                <LiveTrackingMap
-                  delivery={{
-                    lat: displayLocation.lat,
-                    lng: displayLocation.lng,
-                    speed: liveLocation?.speed,
-                    heading: liveLocation?.heading,
-                    accuracy: liveLocation?.accuracy,
-                    updatedAt: displayLocation?.updatedAt,
-                  }}
-                  customer={customerLocation}
-                />
-              </>
-            ) : (
-              <p className="text-sm text-gray-600">Waiting for the delivery location…</p>
-            )
+          {mapDeliveryLocation ? (
+            <LiveTrackingMap
+              delivery={mapDeliveryLocation}
+              customer={customerLocation}
+              followDelivery={trackingActive}
+            />
           ) : (
-            <p className="text-sm text-gray-600">Tracking will appear once enabled by admin.</p>
+            <p className="text-sm text-gray-600">Map is not available (missing shop location).</p>
           )}
         </div>
       )}
