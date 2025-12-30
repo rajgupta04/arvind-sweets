@@ -14,6 +14,7 @@ import deliveryBoyRoutes from './routes/deliveryBoyRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
 import offerRoutes from './routes/offerRoutes.js';
 import addressRoutes from './routes/addressRoutes.js';
+import couponRoutes from './routes/couponRoutes.js';
 
 const app = express();
 
@@ -54,6 +55,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/offers', offerRoutes);
 app.use('/api/addresses', addressRoutes);
+app.use('/api/coupons', couponRoutes);
 
 // Error handling middleware
 app.use(notFound);

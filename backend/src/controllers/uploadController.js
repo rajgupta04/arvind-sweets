@@ -18,8 +18,6 @@ const headContentLength = async (url) => {
 };
 
 export const uploadProductImage = async (req, res) => {
-  const cloudinary = getCloudinary();
-
   if (!req.file) {
     return res.status(400).json({ message: 'Missing file. Send multipart/form-data with field name "image".' });
   }
@@ -34,8 +32,8 @@ export const uploadProductImage = async (req, res) => {
     resource_type: 'image',
     quality: 'auto',
     fetch_format: 'auto',
-    // Use both lossy + strip_profile to reduce payload and remove embedded metadata/profiles.
-    flags: 'lossy,strip_profile',
+    // Use lossy to reduce payload. (Some Cloudinary accounts reject strip_profile.)
+    flags: 'lossy',
     transformation: [{
       width: maxWidth,
       crop: 'limit',
@@ -49,7 +47,7 @@ export const uploadProductImage = async (req, res) => {
         quality: 'auto',
         fetch_format: 'auto',
         dpr: 'auto',
-        flags: 'lossy,strip_profile',
+        flags: 'lossy',
       },
       {
         crop: 'fill',
@@ -59,13 +57,14 @@ export const uploadProductImage = async (req, res) => {
         quality: 'auto',
         fetch_format: 'auto',
         dpr: 'auto',
-        flags: 'lossy,strip_profile',
+        flags: 'lossy',
       },
     ],
     eager_async: true,
   };
 
   try {
+    const cloudinary = getCloudinary();
     const result = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(uploadOptions, (error, uploaded) => {
         if (error) return reject(error);
@@ -83,7 +82,7 @@ export const uploadProductImage = async (req, res) => {
         { quality: 'auto' },
         { fetch_format: 'auto' },
         { dpr: 'auto' },
-        { flags: 'lossy,strip_profile' },
+        { flags: 'lossy' },
       ],
     });
 
@@ -94,7 +93,7 @@ export const uploadProductImage = async (req, res) => {
         { quality: 'auto' },
         { fetch_format: 'auto' },
         { dpr: 'auto' },
-        { flags: 'lossy,strip_profile' },
+        { flags: 'lossy' },
       ],
     });
 
@@ -105,7 +104,7 @@ export const uploadProductImage = async (req, res) => {
         { quality: 'auto' },
         { fetch_format: 'auto' },
         { dpr: 'auto' },
-        { flags: 'lossy,strip_profile' },
+        { flags: 'lossy' },
       ],
     });
 
@@ -132,7 +131,14 @@ export const uploadProductImage = async (req, res) => {
       },
     });
   } catch (error) {
+    const msg = String(error?.message || 'Cloudinary upload failed');
+    if (msg.toLowerCase().includes('cloudinary env vars missing')) {
+      return res.status(500).json({
+        message: 'Cloudinary is not configured on the server',
+        error: msg,
+      });
+    }
     console.error('Cloudinary upload failed:', error);
-    return res.status(500).json({ message: 'Cloudinary upload failed', error: error?.message });
+    return res.status(500).json({ message: 'Cloudinary upload failed', error: msg });
   }
 };

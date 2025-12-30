@@ -8,6 +8,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [authEvent, setAuthEvent] = useState({ type: null, nonce: 0 });
 
   const bootstrappedRef = useRef(false);
   const profileRequestRef = useRef(null);
@@ -86,6 +87,11 @@ export const AuthProvider = ({ children }) => {
         }
         setToken(tokenToUse);
         await fetchProfileOnce();
+
+        // Only treat fresh OAuth redirect token as a login event.
+        if (urlToken) {
+          setAuthEvent((p) => ({ type: 'oauth', nonce: (p?.nonce || 0) + 1 }));
+        }
       } catch {
         clearAuth();
       } finally {
@@ -105,6 +111,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('user', JSON.stringify(userData));
       setToken(userData.token);
       setUser(userData);
+      setAuthEvent((p) => ({ type: 'login', nonce: (p?.nonce || 0) + 1 }));
       return userData;
     } catch (error) {
       throw error;
@@ -121,6 +128,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('token', jwtToken);
       setToken(jwtToken);
       await fetchProfileOnce();
+      setAuthEvent((p) => ({ type: 'oauth', nonce: (p?.nonce || 0) + 1 }));
     } catch (error) {
       clearAuth();
       throw error;
@@ -138,6 +146,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('user', JSON.stringify(userDataResponse));
       setToken(userDataResponse.token);
       setUser(userDataResponse);
+      setAuthEvent((p) => ({ type: 'register', nonce: (p?.nonce || 0) + 1 }));
       return userDataResponse;
     } catch (error) {
       throw error;
@@ -164,18 +173,20 @@ export const AuthProvider = ({ children }) => {
 
   const logout = useCallback(() => {
     clearAuth();
+    setAuthEvent({ type: null, nonce: 0 });
   }, [clearAuth]);
 
   const value = useMemo(() => ({
     user,
     token,
     loading,
+    authEvent,
     loginUser,
     loginWithToken,
     registerUser,
     updateUser,
     logout,
-  }), [user, token, loading, loginUser, loginWithToken, registerUser, updateUser, logout]);
+  }), [user, token, loading, authEvent, loginUser, loginWithToken, registerUser, updateUser, logout]);
 
   return (
     <AuthContext.Provider value={value}>

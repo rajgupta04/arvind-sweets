@@ -8,6 +8,15 @@ import { sendOrderEmail } from '../utils/sendEmail.js';
 import Settings from '../models/Settings.js';
 import { trackingStore } from '../utils/trackingStore.js';
 import User from '../models/User.js';
+import Product from '../models/Product.js';
+import Coupon from '../models/Coupon.js';
+import {
+  normalizeCouponCode,
+  validateCouponOrThrow,
+  recordCouponUsage,
+} from '../utils/couponUtils.js';
+
+const DEFAULT_DELIVERY_CHARGE = 50;
 
 function getFrontendBaseUrl() {
   const single = process.env.FRONTEND_URL;
@@ -35,9 +44,7 @@ export const createOrder = async (req, res) => {
       shippingAddress,
       paymentMethod,
       deliveryType,
-      itemsPrice,
-      deliveryCharge,
-      totalPrice,
+      couponCode,
       paymentStatus,
       userLatitude,
       userLongitude
@@ -47,15 +54,87 @@ export const createOrder = async (req, res) => {
       return res.status(400).json({ message: 'No order items' });
     }
 
+    // Compute prices server-side (do not trust client totals)
+    const ids = Array.isArray(orderItems) ? orderItems.map((i) => i?.product).filter(Boolean) : [];
+    const products = await Product.find({ _id: { $in: ids } }).select('name price discount images');
+    const byId = new Map(products.map((p) => [String(p._id), p]));
+
+    let computedItemsPrice = 0;
+    const normalizedOrderItems = (Array.isArray(orderItems) ? orderItems : []).map((i) => {
+      const productId = String(i?.product || '');
+      const prod = byId.get(productId);
+      if (!prod) {
+        const err = new Error('One or more products are not available');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const qty = Number(i?.quantity);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        const err = new Error('Invalid item quantity');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const basePrice = Number(prod.price) || 0;
+      const disc = Number(prod.discount) || 0;
+      const unit = disc > 0 ? basePrice - (basePrice * disc) / 100 : basePrice;
+      const unitPrice = Math.round(unit * 100) / 100;
+      computedItemsPrice += unitPrice * qty;
+
+      return {
+        product: prod._id,
+        name: i?.name || prod.name,
+        price: unitPrice,
+        quantity: qty,
+        image: i?.image,
+      };
+    });
+
+    computedItemsPrice = Math.round(computedItemsPrice * 100) / 100;
+
+    const computedDeliveryCharge = deliveryType === 'Delivery' ? DEFAULT_DELIVERY_CHARGE : 0;
+
+    let couponDoc = null;
+    let couponSnapshot = { code: '', discountType: 'flat', discountValue: 0, discountAmount: 0 };
+    let discountAmount = 0;
+
+    if (couponCode) {
+      const normalized = normalizeCouponCode(couponCode);
+      couponDoc = await Coupon.findOne({ code: normalized });
+      if (!couponDoc) {
+        return res.status(400).json({ message: 'Invalid coupon code' });
+      }
+      try {
+        const result = validateCouponOrThrow({
+          coupon: couponDoc,
+          itemsPrice: computedItemsPrice,
+          userId: req.user?._id,
+        });
+        discountAmount = result.discountAmount;
+        couponSnapshot = {
+          code: couponDoc.code,
+          discountType: couponDoc.discountType,
+          discountValue: couponDoc.discountValue,
+          discountAmount,
+        };
+      } catch (e) {
+        return res.status(e.statusCode || 400).json({ message: e.message || 'Coupon is not valid' });
+      }
+    }
+
+    const computedTotalPrice = Math.max(0, Math.round((computedItemsPrice + computedDeliveryCharge - discountAmount) * 100) / 100);
+
     const orderData = {
       user: req.user._id,
-      orderItems,
+      orderItems: normalizedOrderItems,
       shippingAddress,
       paymentMethod,
       deliveryType,
-      itemsPrice,
-      deliveryCharge,
-      totalPrice,
+      itemsPrice: computedItemsPrice,
+      deliveryCharge: computedDeliveryCharge,
+      coupon: couponSnapshot,
+      totalPrice: computedTotalPrice,
       paymentStatus: paymentStatus || 'Pending'
     };
 
@@ -103,6 +182,15 @@ export const createOrder = async (req, res) => {
 
     const createdOrder = await order.save();
     const populatedOrder = await createdOrder.populate('user', 'name email');
+
+    // Record coupon usage only after order is created
+    if (couponDoc && discountAmount > 0) {
+      try {
+        await recordCouponUsage({ couponId: couponDoc._id, userId: req.user._id });
+      } catch (e) {
+        console.warn('Coupon usage recording failed:', e?.message || e);
+      }
+    }
 
     notifyOwner(populatedOrder);
     sendOrderEmail(populatedOrder);

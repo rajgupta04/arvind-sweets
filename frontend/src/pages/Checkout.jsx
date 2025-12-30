@@ -9,6 +9,7 @@ import { placeOrder } from '../services/orderService';
 import { toast } from '../components/ui/use-toast';
 import { listMyAddresses, upsertMyAddress } from '../services/addressService';
 import LocationPickerMap from '../components/LocationPickerMap';
+import { validateCoupon } from '../services/couponService';
 
 const DELIVERY_CHARGE = 50;
 
@@ -166,7 +167,58 @@ function Checkout() {
   }, [cartItems]);
 
   const deliveryCharge = deliveryType === 'Delivery' ? DELIVERY_CHARGE : 0;
-  const totalPrice = itemsPrice + deliveryCharge;
+  const [couponCode, setCouponCode] = useState('');
+  const [couponApplying, setCouponApplying] = useState(false);
+  const [couponError, setCouponError] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+
+  useEffect(() => {
+    // If cart/delivery changes, re-apply should happen explicitly.
+    if (appliedCoupon) {
+      setAppliedCoupon(null);
+      setCouponError('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemsPrice, deliveryType]);
+
+  const discountAmount = appliedCoupon?.discountAmount ? Number(appliedCoupon.discountAmount) : 0;
+  const totalPrice = Math.max(0, itemsPrice + deliveryCharge - discountAmount);
+
+  const handleApplyCoupon = async () => {
+    const code = String(couponCode || '').trim();
+    if (!code) {
+      setCouponError('Please enter a coupon code');
+      return;
+    }
+    try {
+      setCouponApplying(true);
+      setCouponError('');
+      const res = await validateCoupon({ code, itemsPrice });
+      const discount = Number(res?.discountAmount) || 0;
+      if (!res?.valid || discount <= 0) {
+        setAppliedCoupon(null);
+        setCouponError('Coupon is not valid');
+        return;
+      }
+      setAppliedCoupon({
+        code: res?.coupon?.code || code.toUpperCase(),
+        discountAmount: discount,
+        coupon: res?.coupon || null,
+      });
+      setCouponError('');
+      toast({ title: 'Coupon applied', description: `Discount: ₹${discount.toFixed(2)}` });
+    } catch (e) {
+      setAppliedCoupon(null);
+      setCouponError(e?.response?.data?.message || 'Failed to apply coupon');
+    } finally {
+      setCouponApplying(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponError('');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -204,6 +256,7 @@ function Checkout() {
         itemsPrice,
         deliveryCharge,
         totalPrice,
+        couponCode: appliedCoupon?.coupon?.code || appliedCoupon?.code || '',
         paymentStatus: 'Pending',
         userLatitude: shippingAddress.location?.lat ?? null,
         userLongitude: shippingAddress.location?.lng ?? null
@@ -463,6 +516,45 @@ function Checkout() {
                 );
               })}
             </div>
+
+            {/* Coupon */}
+            <div className="border-t pt-4">
+              <div className="text-sm font-semibold text-gray-800 mb-2">Have a coupon?</div>
+              <div className="flex gap-2">
+                <input
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                  placeholder="ENTER CODE"
+                  className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  disabled={couponApplying}
+                />
+                {appliedCoupon ? (
+                  <button
+                    type="button"
+                    onClick={handleRemoveCoupon}
+                    className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                  >
+                    Remove
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-60"
+                    disabled={couponApplying}
+                  >
+                    {couponApplying ? 'Applying…' : 'Apply'}
+                  </button>
+                )}
+              </div>
+              {couponError ? <div className="mt-2 text-sm text-red-600">{couponError}</div> : null}
+              {appliedCoupon ? (
+                <div className="mt-2 text-xs text-green-700">
+                  Applied: <span className="font-semibold">{appliedCoupon.code}</span>
+                </div>
+              ) : null}
+            </div>
+
             <div className="border-t pt-2 space-y-2">
               <div className="flex justify-between">
                 <span>Subtotal</span>
@@ -472,6 +564,12 @@ function Checkout() {
                 <span>Delivery</span>
                 <span>{deliveryType === 'Delivery' ? `₹${DELIVERY_CHARGE.toFixed(2)}` : 'Free'}</span>
               </div>
+              {discountAmount > 0 ? (
+                <div className="flex justify-between text-green-700">
+                  <span>Coupon Discount</span>
+                  <span>-₹{discountAmount.toFixed(2)}</span>
+                </div>
+              ) : null}
               <div className="flex justify-between text-xl font-bold pt-2 border-t">
                 <span>Total</span>
                 <span className="text-orange-600">₹{totalPrice.toFixed(2)}</span>

@@ -32,6 +32,7 @@ import ProductsList from './admin/pages/ProductsList';
 import OrdersList from './admin/pages/OrdersList';
 import UsersList from './admin/pages/UsersList';
 import OffersList from './admin/pages/OffersList';
+import CouponsList from './admin/pages/CouponsList';
 import AddProduct from './admin/pages/AddProduct';
 import EditProduct from './admin/pages/EditProduct';
 import AdminProfile from './admin/pages/AdminProfile';
@@ -59,6 +60,7 @@ function App() {
             <Route path="/admin/orders" element={<AdminRoute><OrdersList /></AdminRoute>} />
             <Route path="/admin/users" element={<AdminRoute><UsersList /></AdminRoute>} />
             <Route path="/admin/offers" element={<AdminRoute><OffersList /></AdminRoute>} />
+            <Route path="/admin/coupons" element={<AdminRoute><CouponsList /></AdminRoute>} />
             <Route path="/admin/messages" element={<AdminRoute><AdminMessages /></AdminRoute>} />
             <Route path="/admin/products/add" element={<AdminRoute><AddProduct /></AdminRoute>} />
             <Route path="/admin/products/edit/:id" element={<AdminRoute><EditProduct /></AdminRoute>} />

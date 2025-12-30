@@ -20,6 +20,7 @@ function AdminSidebar() {
     { path: '/admin/products', label: 'All Products', icon: FiList },
     { path: '/admin/products/add', label: 'Add Product', icon: FiPlus },
     { path: '/admin/offers', label: 'Offers', icon: FiTag },
+    { path: '/admin/coupons', label: 'Coupons', icon: FiTag },
     { path: '/admin/users', label: 'Users', icon: FiUser },
     { path: '/admin/settings/delivery', label: 'Delivery Settings', icon: FiList },
     { path: '/admin/messages', label: 'Customer Messages', icon: FiList },

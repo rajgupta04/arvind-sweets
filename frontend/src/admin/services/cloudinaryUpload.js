@@ -12,15 +12,22 @@ const getAuthHeader = () => {
   }
 };
 
-const uploadToBackend = async (file) => {
+const uploadToBackend = async (file, options = {}) => {
   const endpointBase = API?.defaults?.baseURL || '/api';
   const endpoint = `${endpointBase}/uploads/products/image`;
+
+  const folder = options?.folder ? String(options.folder) : null;
+  const maxWidth = options?.maxWidth ? String(options.maxWidth) : null;
+  const query = new URLSearchParams();
+  if (folder) query.set('folder', folder);
+  if (maxWidth) query.set('maxWidth', maxWidth);
+  const url = query.toString() ? `${endpoint}?${query.toString()}` : endpoint;
 
   const formData = new FormData();
   // Backend expects field name "image"
   formData.append('image', file);
 
-  const response = await fetch(endpoint, {
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       ...getAuthHeader(),
@@ -43,14 +50,14 @@ const uploadToBackend = async (file) => {
  * @param {string} uploadPreset - Cloudinary upload preset name (optional, for unsigned uploads)
  * @returns {Promise<string>} - Returns the secure_url of the uploaded image
  */
-export const uploadToCloudinary = async (file, uploadPreset = null) => {
+export const uploadToCloudinary = async (file, uploadPreset = null, options = {}) => {
   try {
     // Prefer server-side signed upload so transformations are enforced.
     // Falls back to unsigned preset upload if backend upload isn't available.
     const preferBackend = String(import.meta.env.VITE_USE_BACKEND_UPLOAD ?? 'true').toLowerCase() !== 'false';
     if (preferBackend) {
       try {
-        const url = await uploadToBackend(file);
+        const url = await uploadToBackend(file, options);
         if (url) return url;
       } catch (err) {
         console.warn('Backend upload unavailable, falling back to unsigned preset upload.', err);
@@ -63,7 +70,9 @@ export const uploadToCloudinary = async (file, uploadPreset = null) => {
 
     // Enforce upload-time optimizations (works best when preset allows these params)
     // Folder-based organization
-    const folder = import.meta.env.VITE_CLOUDINARY_FOLDER || 'arvind-sweets/products';
+    const folder = options?.folder
+      ? String(options.folder)
+      : (import.meta.env.VITE_CLOUDINARY_FOLDER || 'arvind-sweets/products');
     formData.append('folder', folder);
 
     // Requested options
@@ -71,21 +80,30 @@ export const uploadToCloudinary = async (file, uploadPreset = null) => {
     formData.append('fetch_format', 'auto');
     formData.append('flags', 'lossy');
     // Width limit transformation (max width 1200)
-    formData.append('transformation', 'c_limit,w_1200');
+    const maxWidth = Number(options?.maxWidth) > 0 ? Number(options.maxWidth) : 1200;
+    formData.append('transformation', `c_limit,w_${maxWidth}`);
 
     // Optional eager thumbs (generated at upload-time if allowed by preset)
     formData.append('eager', 'c_fill,g_auto,w_300,h_300|c_fill,g_auto,w_100,h_100');
     formData.append('eager_async', 'true');
     
-    // If upload preset is provided, use it for unsigned upload
-    if (uploadPreset) {
-      formData.append('upload_preset', uploadPreset);
+    // Unsigned uploads REQUIRE an upload preset.
+    if (!uploadPreset) {
+      throw new Error(
+        'Cloudinary unsigned upload requires VITE_CLOUDINARY_UPLOAD_PRESET. Either set it or enable backend upload (recommended).'
+      );
     }
+    formData.append('upload_preset', uploadPreset);
 
     // Cloudinary upload URL
     // Replace 'your-cloud-name' with your actual Cloudinary cloud name
     // You can also use environment variable: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME
-    const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'your-cloud-name';
+    const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+    if (!cloudName || cloudName === 'your-cloud-name') {
+      throw new Error(
+        'Missing VITE_CLOUDINARY_CLOUD_NAME for unsigned uploads. Either set it or enable backend upload (recommended).'
+      );
+    }
     const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
 
     // Upload to Cloudinary
