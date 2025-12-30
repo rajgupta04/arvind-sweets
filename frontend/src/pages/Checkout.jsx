@@ -12,6 +12,7 @@ import LocationPickerMap from '../components/LocationPickerMap';
 import { validateCoupon } from '../services/couponService';
 
 const DELIVERY_CHARGE = 50;
+const FREE_DELIVERY_THRESHOLD = 250;
 
 function Checkout() {
   const navigate = useNavigate();
@@ -166,7 +167,16 @@ function Checkout() {
     return cartItems.reduce((total, item) => total + computeItemPrice(item) * item.quantity, 0);
   }, [cartItems]);
 
-  const deliveryCharge = deliveryType === 'Delivery' ? DELIVERY_CHARGE : 0;
+  const mrpItemsPrice = useMemo(() => {
+    return cartItems.reduce((total, item) => total + (Number(item.price) || 0) * (Number(item.quantity) || 0), 0);
+  }, [cartItems]);
+
+  const deliveryCharge = useMemo(() => {
+    if (deliveryType !== 'Delivery') return 0;
+
+    const roundedItemsPrice = Math.round(itemsPrice * 100) / 100;
+    return roundedItemsPrice >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_CHARGE;
+  }, [deliveryType, itemsPrice]);
   const [couponCode, setCouponCode] = useState('');
   const [couponApplying, setCouponApplying] = useState(false);
   const [couponError, setCouponError] = useState('');
@@ -183,6 +193,7 @@ function Checkout() {
 
   const discountAmount = appliedCoupon?.discountAmount ? Number(appliedCoupon.discountAmount) : 0;
   const totalPrice = Math.max(0, itemsPrice + deliveryCharge - discountAmount);
+  const hasDiscount = mrpItemsPrice - itemsPrice > 0.009;
 
   const handleApplyCoupon = async () => {
     const code = String(couponCode || '').trim();
@@ -304,7 +315,7 @@ function Checkout() {
                     className="w-5 h-5 text-orange-600"
                   />
                   <FiMapPin className="w-5 h-5" />
-                  <span>Home Delivery (₹50)</span>
+                  <span>Home Delivery (₹50, Free on ₹250+)</span>
                 </label>
                 <label className="flex items-center space-x-3 cursor-pointer">
                   <input
@@ -558,11 +569,24 @@ function Checkout() {
             <div className="border-t pt-2 space-y-2">
               <div className="flex justify-between">
                 <span>Subtotal</span>
-                <span>₹{itemsPrice.toFixed(2)}</span>
+                <span className="text-right">
+                  {hasDiscount ? (
+                    <>
+                      <span className="text-sm text-gray-500 line-through mr-2">₹{mrpItemsPrice.toFixed(2)}</span>
+                      <span>₹{itemsPrice.toFixed(2)}</span>
+                    </>
+                  ) : (
+                    <span>₹{itemsPrice.toFixed(2)}</span>
+                  )}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span>Delivery</span>
-                <span>{deliveryType === 'Delivery' ? `₹${DELIVERY_CHARGE.toFixed(2)}` : 'Free'}</span>
+                <span>
+                  {deliveryType !== 'Delivery'
+                    ? 'Free'
+                    : (deliveryCharge === 0 ? <span className="text-green-700">Free</span> : `₹${deliveryCharge.toFixed(2)}`)}
+                </span>
               </div>
               {discountAmount > 0 ? (
                 <div className="flex justify-between text-green-700">

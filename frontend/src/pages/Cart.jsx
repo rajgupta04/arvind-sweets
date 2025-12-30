@@ -1,14 +1,35 @@
 // Cart page component
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useContext } from 'react';
 import { CartContext } from '../context/CartContext';
 import { FiTrash2, FiPlus, FiMinus } from 'react-icons/fi';
 import { getProductCardThumbUrl } from '../lib/cloudinary.js';
 
+const DELIVERY_CHARGE = 50;
+const FREE_DELIVERY_THRESHOLD = 250;
+
 function Cart() {
   const { cartItems, updateQuantity, removeFromCart, getCartTotal, clearCart } = useContext(CartContext);
   const navigate = useNavigate();
+
+  const mrpSubtotal = useMemo(() => {
+    return cartItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 0), 0);
+  }, [cartItems]);
+
+  const discountedSubtotal = useMemo(() => {
+    return cartItems.reduce((sum, item) => {
+      const mrp = Number(item.price) || 0;
+      const discountPercent = Number(item.discount) || 0;
+      const unit = discountPercent > 0 ? mrp - (mrp * discountPercent) / 100 : mrp;
+      const unitRounded = Math.round(unit * 100) / 100;
+      return sum + unitRounded * (Number(item.quantity) || 0);
+    }, 0);
+  }, [cartItems]);
+
+  const hasDiscount = mrpSubtotal - discountedSubtotal > 0.009;
+  const deliveryCharge = discountedSubtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_CHARGE;
+  const totalPrice = discountedSubtotal + deliveryCharge;
 
   if (cartItems.length === 0) {
     return (
@@ -118,16 +139,25 @@ function Cart() {
             <div className="space-y-2 mb-4">
               <div className="flex justify-between">
                 <span>Subtotal ({cartItems.reduce((sum, item) => sum + item.quantity, 0)} items)</span>
-                <span>₹{getCartTotal().toFixed(2)}</span>
+                <span className="text-right">
+                  {hasDiscount ? (
+                    <>
+                      <span className="text-sm text-gray-500 line-through mr-2">₹{mrpSubtotal.toFixed(2)}</span>
+                      <span>₹{discountedSubtotal.toFixed(2)}</span>
+                    </>
+                  ) : (
+                    <span>₹{discountedSubtotal.toFixed(2)}</span>
+                  )}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span>Delivery Charge</span>
-                <span>₹50.00</span>
+                <span>{deliveryCharge === 0 ? <span className="text-green-700">Free</span> : `₹${deliveryCharge.toFixed(2)}`}</span>
               </div>
               <div className="border-t pt-2">
                 <div className="flex justify-between text-xl font-bold">
                   <span>Total</span>
-                  <span className="text-orange-600">₹{(getCartTotal() + 50).toFixed(2)}</span>
+                  <span className="text-orange-600">₹{totalPrice.toFixed(2)}</span>
                 </div>
               </div>
             </div>

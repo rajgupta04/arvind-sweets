@@ -17,6 +17,7 @@ import {
 } from '../utils/couponUtils.js';
 
 const DEFAULT_DELIVERY_CHARGE = 50;
+const FREE_DELIVERY_THRESHOLD = 250;
 
 function getFrontendBaseUrl() {
   const single = process.env.FRONTEND_URL;
@@ -93,7 +94,10 @@ export const createOrder = async (req, res) => {
 
     computedItemsPrice = Math.round(computedItemsPrice * 100) / 100;
 
-    const computedDeliveryCharge = deliveryType === 'Delivery' ? DEFAULT_DELIVERY_CHARGE : 0;
+    const computedDeliveryCharge =
+      deliveryType === 'Delivery'
+        ? (computedItemsPrice >= FREE_DELIVERY_THRESHOLD ? 0 : DEFAULT_DELIVERY_CHARGE)
+        : 0;
 
     let couponDoc = null;
     let couponSnapshot = { code: '', discountType: 'flat', discountValue: 0, discountAmount: 0 };
