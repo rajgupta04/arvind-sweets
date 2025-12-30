@@ -4,7 +4,7 @@ import { AuthContext } from "../context/AuthContext";
 import { CartContext } from "../context/CartContext";
 import Loader from "../components/Loader";
 import { getAdminThumbUrl } from '../lib/cloudinary.js';
-import { getOrderDetails, submitOrderRatings } from "../services/orderService";
+import { cancelMyOrder, getOrderDetails, submitOrderRatings } from "../services/orderService";
 import OrderStatusTracker from "./OrderStatusTracker";
 import LiveTrackingMap from "../components/LiveTrackingMap";
 import { createSocket } from "../services/socket";
@@ -34,6 +34,23 @@ export default function OrderDetails() {
   const [ratingSubmitting, setRatingSubmitting] = useState(false);
   const [ratingError, setRatingError] = useState('');
   const [ratingSaved, setRatingSaved] = useState(false);
+
+  const CANCEL_REASONS = useMemo(
+    () => [
+      { key: 'mistake', label: 'Ordered by mistake' },
+      { key: 'change_mind', label: 'Changed my mind' },
+      { key: 'better_price', label: 'Found a better price elsewhere' },
+      { key: 'delay', label: 'Delivery time is too long' },
+      { key: 'wrong_details', label: 'Wrong address/details' },
+      { key: 'other', label: 'Other' },
+    ],
+    []
+  );
+  const [showCancel, setShowCancel] = useState(false);
+  const [cancelReasonKey, setCancelReasonKey] = useState('');
+  const [cancelOtherText, setCancelOtherText] = useState('');
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [cancelError, setCancelError] = useState('');
 
   useEffect(() => {
     if (!user) {
@@ -207,6 +224,46 @@ export default function OrderDetails() {
     navigate('/checkout');
   };
 
+  const canCancel = useMemo(() => {
+    const status = String(order?.orderStatus || '').trim();
+    // Simplest safe rule: allow cancel before it is Out for Delivery / Delivered / Cancelled
+    if (!status) return true;
+    if (status === 'Delivered' || status === 'Cancelled' || status === 'Out for Delivery') return false;
+    return true;
+  }, [order?.orderStatus]);
+
+  const submitCancel = async () => {
+    setCancelError('');
+    const selected = CANCEL_REASONS.find((r) => r.key === cancelReasonKey);
+    if (!selected) {
+      setCancelError('Please select a reason.');
+      return;
+    }
+
+    const message = selected.key === 'other' ? String(cancelOtherText || '').trim() : selected.label;
+    if (selected.key === 'other' && message.length < 3) {
+      setCancelError('Please enter a reason.');
+      return;
+    }
+
+    try {
+      setCancelSubmitting(true);
+      await cancelMyOrder(order._id, {
+        reasonKey: selected.key,
+        reasonLabel: selected.label,
+        message,
+      });
+      setShowCancel(false);
+      setCancelReasonKey('');
+      setCancelOtherText('');
+      fetchOrder();
+    } catch (e) {
+      setCancelError(e?.response?.data?.message || 'Failed to cancel order');
+    } finally {
+      setCancelSubmitting(false);
+    }
+  };
+
   if (authLoading) return <Loader />;
   if (loading || !order) return <Loader />;
 
@@ -308,6 +365,110 @@ export default function OrderDetails() {
       <div className="bg-white rounded-xl shadow p-6">
         <h2 className="text-lg font-semibold mb-4">Order Status</h2>
         <OrderStatusTracker currentStatus={order.orderStatus?.toLowerCase()} />
+
+        {order?.orderStatus === 'Cancelled' ? (
+          <div className="mt-4 text-sm text-gray-700 bg-gray-50 border rounded-lg p-4">
+            <div className="font-semibold text-gray-900">Cancellation reason</div>
+            <div className="mt-1">
+              {order?.cancellation?.reasonLabel || 'Cancelled'}
+              {order?.cancellation?.reasonKey === 'other' && order?.cancellation?.message
+                ? ` — ${order.cancellation.message}`
+                : null}
+            </div>
+          </div>
+        ) : null}
+
+        {canCancel && order?.orderStatus !== 'Cancelled' ? (
+          <div className="mt-5">
+            {!showCancel ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setCancelError('');
+                  setShowCancel(true);
+                }}
+                className="px-4 py-2 rounded-lg border border-red-200 text-red-700 hover:bg-red-50"
+              >
+                Cancel order
+              </button>
+            ) : (
+              <div className="mt-3 border rounded-xl p-4 bg-white">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-semibold text-gray-900">Why are you cancelling?</div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (cancelSubmitting) return;
+                      setShowCancel(false);
+                      setCancelError('');
+                    }}
+                    className="text-sm text-gray-500 hover:text-gray-700"
+                  >
+                    Close
+                  </button>
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {CANCEL_REASONS.map((r) => (
+                    <label
+                      key={r.key}
+                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 ${
+                        cancelReasonKey === r.key ? 'border-orange-300 bg-orange-50' : 'border-gray-200'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="cancelReason"
+                        value={r.key}
+                        checked={cancelReasonKey === r.key}
+                        onChange={() => setCancelReasonKey(r.key)}
+                        disabled={cancelSubmitting}
+                      />
+                      <span>{r.label}</span>
+                    </label>
+                  ))}
+                </div>
+
+                {cancelReasonKey === 'other' ? (
+                  <div className="mt-3">
+                    <textarea
+                      value={cancelOtherText}
+                      onChange={(e) => setCancelOtherText(e.target.value)}
+                      placeholder="Write your reason"
+                      className="w-full min-h-[90px] px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      disabled={cancelSubmitting}
+                    />
+                  </div>
+                ) : null}
+
+                {cancelError ? <div className="mt-2 text-sm text-red-600">{cancelError}</div> : null}
+
+                <div className="mt-4 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (cancelSubmitting) return;
+                      setShowCancel(false);
+                      setCancelError('');
+                    }}
+                    className="px-4 py-2 rounded-lg border hover:bg-gray-50"
+                    disabled={cancelSubmitting}
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={submitCancel}
+                    className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
+                    disabled={cancelSubmitting}
+                  >
+                    {cancelSubmitting ? 'Cancelling…' : 'Confirm cancel'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
 
       {order?.orderStatus === 'Delivered' ? (

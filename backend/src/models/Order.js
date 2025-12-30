@@ -123,6 +123,13 @@ const orderSchema = new mongoose.Schema({
   },
   paidAt: Date,
   deliveredAt: Date,
+  cancelledAt: { type: Date, default: null },
+  cancellation: {
+    reasonKey: { type: String, default: '' },
+    reasonLabel: { type: String, default: '' },
+    message: { type: String, default: '' },
+    cancelledBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  },
   ratings: {
     order: { type: Number, min: 1, max: 5, default: null },
     delivery: { type: Number, min: 1, max: 5, default: null },

@@ -33,3 +33,7 @@ export const submitOrderRatings = (id, { orderRating, deliveryRating }) => {
   return API.post(`/orders/${id}/ratings`, { orderRating, deliveryRating });
 };
 
+export const cancelMyOrder = (id, { reasonKey, reasonLabel, message }) => {
+  return API.post(`/orders/${id}/cancel`, { reasonKey, reasonLabel, message });
+};
+

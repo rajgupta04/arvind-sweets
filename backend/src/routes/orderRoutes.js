@@ -15,7 +15,8 @@ import {
   setOrderTrackingEnabled,
   getMyDeliveryOrders,
   startDelivery,
-  markDeliveredByDeliveryBoy
+  markDeliveredByDeliveryBoy,
+  cancelOrder
 } from '../controllers/orderController.js';
 import { protect, admin, authorizeRoles } from '../middleware/authMiddleware.js';
 
@@ -27,6 +28,7 @@ router.get('/delivery/my-packages', protect, authorizeRoles('delivery_boy'), get
 router.get('/latest', protect, admin, getLatestOrder);
 router.get('/:id/tracking', protect, getOrderTracking);
 router.post('/:id/ratings', protect, rateOrder);
+router.post('/:id/cancel', protect, cancelOrder);
 router.get('/:id', protect, getOrderById);
 router.get('/', protect, admin, getOrders);
 router.put('/:id/deliver', protect, admin, updateOrderToDelivered);

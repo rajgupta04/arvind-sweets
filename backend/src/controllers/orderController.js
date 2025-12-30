@@ -406,6 +406,67 @@ export const updateOrderStatus = async (req, res) => {
   }
 };
 
+// @desc    Cancel an order with reason
+// @route   POST /api/orders/:id/cancel
+// @access  Private (Owner/Admin)
+export const cancelOrder = async (req, res) => {
+  try {
+    const { reasonKey, reasonLabel, message } = req.body || {};
+
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+
+    const isOwner = String(order.user) === String(req.user?._id);
+    const isAdmin = req.user?.role === 'admin';
+    if (!isOwner && !isAdmin) return res.status(403).json({ message: 'Not authorized' });
+
+    const status = String(order.orderStatus || '').trim();
+    if (status === 'Delivered') return res.status(400).json({ message: 'Delivered orders cannot be cancelled' });
+    if (status === 'Cancelled') return res.status(400).json({ message: 'Order already cancelled' });
+    if (status === 'Out for Delivery') {
+      return res.status(400).json({ message: 'Order cannot be cancelled once out for delivery' });
+    }
+
+    const key = String(reasonKey || '').trim().toLowerCase();
+    const label = String(reasonLabel || '').trim();
+    const msg = String(message || '').trim();
+
+    if (!key || !label) {
+      return res.status(400).json({ message: 'Cancellation reason is required' });
+    }
+    if (key === 'other' && msg.length < 3) {
+      return res.status(400).json({ message: 'Please enter a reason' });
+    }
+
+    order.orderStatus = 'Cancelled';
+    order.cancelledAt = new Date();
+    order.liveTrackingEnabled = false;
+    order.cancellation = {
+      reasonKey: key,
+      reasonLabel: label,
+      message: key === 'other' ? msg : '',
+      cancelledBy: req.user?._id || null,
+    };
+
+    const updatedOrder = await order.save();
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`order_${order._id}`).emit('orderStatusUpdated', {
+        orderId: String(order._id),
+        orderStatus: 'Cancelled',
+      });
+      io.to(`order_${order._id}`).emit('trackingStopped', {
+        orderId: String(order._id),
+      });
+    }
+
+    return res.json(updatedOrder);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // @desc    Get latest order for admin polling
 // @route   GET /api/orders/latest
 // @access  Private/Admin

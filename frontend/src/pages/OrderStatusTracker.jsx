@@ -11,7 +11,7 @@ import React from "react";
  *  - Mark completed steps with orange background and text
  *  - Show red cancelled message when status === "cancelled"
  *
- * Styling uses Tailwind classes; adjust colors/sizes as needed.
+ * Styling uses Tailwind classes.
  */
 
 const steps = [
@@ -22,73 +22,76 @@ const steps = [
 ];
 
 export default function OrderStatusTracker({ currentStatus }) {
-  // Normalize input: convert to lowercase string
-  const normalized = (currentStatus || "").toString().toLowerCase().trim();
+  const normalize = (raw) => {
+    const v = (raw || "").toString().toLowerCase().trim();
+    if (!v) return "placed";
+    if (v === "cancelled" || v === "canceled") return "cancelled";
+    if (v === "processing") return "preparing";
+    if (v === "pending") return "placed";
+    if (v.includes("out") && v.includes("delivery")) return "out for delivery";
+    return v;
+  };
 
-  // If cancelled — show special UI
+  const normalized = normalize(currentStatus);
+
+  // Cancelled — show special UI (keep it compact; parent usually provides the card)
   if (normalized === "cancelled") {
     return (
-      <div className="bg-white rounded-xl shadow p-6">
-        <div className="flex items-center space-x-3">
-          <div className="w-3 h-3 rounded-full bg-red-600" />
-          <h3 className="text-lg font-semibold text-red-600">Order Cancelled</h3>
+      <div className="flex items-start gap-3">
+        <div className="mt-1 w-2.5 h-2.5 rounded-full bg-red-600" aria-hidden />
+        <div>
+          <p className="text-sm font-semibold text-red-600">Order Cancelled</p>
+          <p className="text-xs text-gray-600 mt-1">This order has been cancelled.</p>
         </div>
-        <p className="mt-3 text-sm text-gray-600">This order has been cancelled.</p>
       </div>
     );
   }
 
-  // Find the current step index (0-based). If not found, will be -1 meaning nothing completed.
-  const currentIndex = steps.findIndex((s) => s.value === normalized);
+  // Find current step index (0-based). If unknown, show first step as current.
+  const rawIndex = steps.findIndex((s) => s.value === normalized);
+  const currentIndex = rawIndex >= 0 ? rawIndex : 0;
 
   // Compute fill percentage for the progress line
-  const fillPercent =
-    currentIndex <= 0 ? 0 : (currentIndex / (steps.length - 1)) * 100;
+  const fillPercent = (currentIndex / (steps.length - 1)) * 100;
 
   return (
-    <div className="bg-white rounded-xl shadow p-6">
-      {/* The small title is optional here - keep in parent if you want different layout */}
-      {/* <h3 className="text-lg font-semibold mb-4">Order Status</h3> */}
+    <div className="relative w-full">
+      <div className="absolute left-0 right-0 top-4 sm:top-5 h-1 bg-gray-200 rounded" aria-hidden />
+      <div
+        className="absolute left-0 top-4 sm:top-5 h-1 bg-orange-600 rounded transition-all duration-300"
+        style={{ width: `${fillPercent}%` }}
+        aria-hidden
+      />
 
-      <div className="relative w-full px-2 py-4">
-        {/* Background line */}
-        <div className="absolute left-4 right-4 top-6 h-1 bg-gray-200 rounded" />
+      <div className="relative z-10 flex items-start justify-between">
+        {steps.map((step, index) => {
+          const isCurrent = index === currentIndex;
+          const isDelivered = normalized === 'delivered';
+          const isCompleted = index < currentIndex;
+          const showCheck = isCompleted || (isDelivered && isCurrent);
 
-        {/* Filled progress line */}
-        <div
-          className="absolute left-4 top-6 h-1 bg-orange-600 rounded transition-all duration-500"
-          style={{ width: `${fillPercent}%` }}
-        />
+          const circleBase = "flex items-center justify-center rounded-full border transition-colors";
+          const circleSize = "w-8 h-8 sm:w-9 sm:h-9";
+          const circleState = isCurrent || isCompleted
+            ? "bg-orange-600 border-orange-600 text-white"
+            : "bg-white border-gray-300 text-gray-400";
 
-        {/* Step circles */}
-        <div className="flex justify-between items-center relative z-10">
-          {steps.map((step, index) => {
-            const isCompleted = index <= currentIndex && currentIndex !== -1;
-            const circleClasses = isCompleted
-              ? "bg-orange-600 text-white border-orange-600"
-              : "bg-gray-100 text-gray-600 border-gray-300";
+          const labelState = isCompleted || isCurrent ? "text-gray-900" : "text-gray-400";
 
-            return (
-              <div key={step.id} className="flex flex-col items-center w-1/4">
-                <div
-                  className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-300 ${circleClasses}`}
-                  aria-current={isCompleted ? "true" : "false"}
-                >
-                  <span className="text-sm font-semibold">{step.id}</span>
-                </div>
-                <div className="mt-2 text-center">
-                  <div
-                    className={`text-xs ${
-                      isCompleted ? "text-orange-700 font-medium" : "text-gray-500"
-                    }`}
-                  >
-                    {step.label}
-                  </div>
-                </div>
+          return (
+            <div key={step.id} className="flex flex-col items-center" style={{ width: `${100 / steps.length}%` }}>
+              <div
+                className={`${circleBase} ${circleSize} ${circleState}`}
+                aria-current={isCurrent ? "step" : undefined}
+              >
+                <span className="text-sm font-semibold">{showCheck ? "✓" : step.id}</span>
               </div>
-            );
-          })}
-        </div>
+              <div className={`mt-2 text-[11px] sm:text-xs font-medium text-center ${labelState}`}>
+                {step.label}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
