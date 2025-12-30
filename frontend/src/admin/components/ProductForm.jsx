@@ -25,6 +25,7 @@ function ProductForm({ initialData = null, onSubmit, onCancel, isLoading = false
     'Dry Sweets',
     'Snacks',
     'Seasonal',
+    'Fastfood',
     'Special Offers'
   ];
 

@@ -6,6 +6,7 @@ import {
   FiPackage, 
   FiPlus, 
   FiList,
+  FiTag,
   FiLogOut,
   FiUser
 } from 'react-icons/fi';
@@ -18,6 +19,7 @@ function AdminSidebar() {
     { path: '/admin/orders', label: 'Orders', icon: FiPackage },
     { path: '/admin/products', label: 'All Products', icon: FiList },
     { path: '/admin/products/add', label: 'Add Product', icon: FiPlus },
+    { path: '/admin/offers', label: 'Offers', icon: FiTag },
     { path: '/admin/users', label: 'Users', icon: FiUser },
     { path: '/admin/settings/delivery', label: 'Delivery Settings', icon: FiList },
     { path: '/admin/messages', label: 'Customer Messages', icon: FiList },

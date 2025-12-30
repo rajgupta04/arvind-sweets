@@ -151,3 +151,43 @@ export const updateSettings = async (settings) => {
   const response = await API.put('/settings/update', settings);
   return response.data;
 };
+
+// ---------------------------
+// Offers
+// ---------------------------
+
+export const listOffers = async () => {
+  const response = await API.get('/offers');
+  return response.data;
+};
+
+export const createOffer = async ({ title, description, ctaText, ctaLink, active, startsAt, endsAt } = {}) => {
+  const response = await API.post('/offers', {
+    title,
+    description,
+    ctaText,
+    ctaLink,
+    active,
+    startsAt,
+    endsAt,
+  });
+  return response.data;
+};
+
+export const updateOffer = async (id, { title, description, ctaText, ctaLink, active, startsAt, endsAt } = {}) => {
+  const response = await API.put(`/offers/${id}`, {
+    title,
+    description,
+    ctaText,
+    ctaLink,
+    active,
+    startsAt,
+    endsAt,
+  });
+  return response.data;
+};
+
+export const deleteOffer = async (id) => {
+  const response = await API.delete(`/offers/${id}`);
+  return response.data;
+};

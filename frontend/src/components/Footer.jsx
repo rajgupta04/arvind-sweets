@@ -31,6 +31,7 @@ function Footer() {
               <li><Link to="/products?category=Dry Sweets" className="text-gray-300 hover:text-white">Dry Sweets</Link></li>
               <li><Link to="/products?category=Snacks" className="text-gray-300 hover:text-white">Snacks</Link></li>
               <li><Link to="/products?category=Seasonal" className="text-gray-300 hover:text-white">Seasonal</Link></li>
+              <li><Link to="/products?category=Fastfood" className="text-gray-300 hover:text-white">Fastfood</Link></li>
             </ul>
           </div>
           

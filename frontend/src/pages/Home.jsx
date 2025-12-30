@@ -7,6 +7,7 @@ import ProductCard from '../components/ProductCard';
 import Loader from '../components/Loader';
 import { FiArrowRight } from 'react-icons/fi';
 import { getOptimizedImageUrl } from '../lib/cloudinary.js';
+import { getActiveOffer } from '../services/offerService.js';
 
 const heroHighlights = [
   {
@@ -31,11 +32,25 @@ const heroImage =
 function Home() {
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeOffer, setActiveOffer] = useState(null);
 
   const MotionLink = motion(Link);
 
   useEffect(() => {
     fetchFeaturedProducts();
+  }, []);
+
+  useEffect(() => {
+    const loadOffer = async () => {
+      try {
+        const data = await getActiveOffer();
+        setActiveOffer(data || null);
+      } catch {
+        setActiveOffer(null);
+      }
+    };
+
+    loadOffer();
   }, []);
 
   const fetchFeaturedProducts = async () => {
@@ -186,6 +201,7 @@ function Home() {
         { category: "Dry Sweets", icon: "🍡" },
         { category: "Snacks", icon: "🥟" },
         { category: "Seasonal", icon: "🎁" },
+        { category: "Fastfood", icon: "🍔" },
       ].map(({ category, icon }) => (
         <MotionLink
           key={category}
@@ -230,18 +246,46 @@ function Home() {
       </div>
 
       {/* Special Offers */}
-      <div className="bg-orange-600 text-white py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl font-bold mb-4">Special Diwali Offer! 🎉</h2>
-          <p className="text-xl mb-6">Get 20% off on all sweets this festive season</p>
-          <Link
-            to="/products?category=Seasonal"
-            className="inline-block bg-white text-orange-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition"
-          >
-            Shop Seasonal Collection
-          </Link>
-        </div>
-      </div>
+      {activeOffer ? (
+        (() => {
+          const title = activeOffer?.title;
+          const description = activeOffer?.description;
+          const ctaText = activeOffer?.ctaText;
+          const ctaLink = activeOffer?.ctaLink;
+          const showCta = Boolean(ctaText && ctaLink);
+          const isExternal =
+            typeof ctaLink === 'string' && /^https?:\/\//i.test(ctaLink);
+
+          return (
+            <div className="bg-orange-600 text-white py-12">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+                {title ? <h2 className="text-3xl font-bold mb-4">{title}</h2> : null}
+                {description ? <p className="text-xl mb-6">{description}</p> : null}
+
+                {showCta ? (
+                  isExternal ? (
+                    <a
+                      href={ctaLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-block bg-white text-orange-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition"
+                    >
+                      {ctaText}
+                    </a>
+                  ) : (
+                    <Link
+                      to={ctaLink}
+                      className="inline-block bg-white text-orange-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition"
+                    >
+                      {ctaText}
+                    </Link>
+                  )
+                ) : null}
+              </div>
+            </div>
+          );
+        })()
+      ) : null}
     </div>
   );
 }

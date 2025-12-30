@@ -218,7 +218,7 @@ function AdminProducts() {
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                     className="w-full px-3 py-2 border rounded-lg"
                   >
-                    {['Bengali Sweets', 'Dry Sweets', 'Snacks', 'Seasonal', 'Special Offers'].map(cat => (
+                    {['Bengali Sweets', 'Dry Sweets', 'Snacks', 'Seasonal', 'Fastfood', 'Special Offers'].map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>

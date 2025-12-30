@@ -17,7 +17,7 @@ function Products() {
   const [maxPrice, setMaxPrice] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
-  const categories = ['Bengali Sweets', 'Dry Sweets', 'Snacks', 'Seasonal', 'Special Offers'];
+  const categories = ['Bengali Sweets', 'Dry Sweets', 'Snacks', 'Seasonal', 'Fastfood', 'Special Offers'];
 
   // Fetch products function
   const fetchProducts = async () => {
