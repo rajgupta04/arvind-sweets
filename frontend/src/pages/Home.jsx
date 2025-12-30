@@ -1,6 +1,7 @@
 // Home page component
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { getProducts } from '../services/productService';
 import ProductCard from '../components/ProductCard';
 import Loader from '../components/Loader';
@@ -30,6 +31,8 @@ const heroImage =
 function Home() {
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const MotionLink = motion(Link);
 
   useEffect(() => {
     fetchFeaturedProducts();
@@ -61,7 +64,12 @@ function Home() {
         <div className="absolute -top-24 -right-24 w-72 h-72 bg-orange-200 rounded-full blur-3xl opacity-60" />
         <div className="absolute -bottom-16 -left-10 w-72 h-72 bg-yellow-200 rounded-full blur-3xl opacity-40" />
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-24 grid lg:grid-cols-2 gap-12 items-center">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5 }}
+          className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-24 grid lg:grid-cols-2 gap-12 items-center"
+        >
           {/* Left copy */}
           <div className="space-y-8">
             <div className="inline-flex items-center space-x-2 bg-white/80 border border-orange-100 rounded-full px-4 py-2 text-sm font-medium text-orange-600 shadow-sm">
@@ -117,7 +125,11 @@ function Home() {
           </div>
 
           {/* Right visual */}
-          <div className="relative">
+          <motion.div
+            className="relative"
+            animate={{ y: [0, -10, 0] }}
+            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+          >
             <div className="rounded-[32px] bg-white shadow-2xl p-6 lg:p-8">
               <div className="aspect-[4/5] rounded-3xl overflow-hidden relative">
                 <img
@@ -148,8 +160,8 @@ function Home() {
             {/* <div className="absolute -left-6 -bottom-6 bg-white shadow-lg rounded-2xl px-6 py-4 text-sm font-semibold text-gray-800">
               Verified by 3,500+ celebrations
             </div> */}
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </section>
 
       {/* Shop Story
@@ -175,14 +187,20 @@ function Home() {
         { category: "Snacks", icon: "🥟" },
         { category: "Seasonal", icon: "🎁" },
       ].map(({ category, icon }) => (
-        <Link
+        <MotionLink
           key={category}
           to={`/products?category=${category}`}
           className="bg-white rounded-lg shadow-md p-6 text-center hover:shadow-xl transition-transform hover:scale-105"
         >
-          <div className="text-4xl mb-3">{icon}</div>
+          <motion.div
+            whileHover={{ rotate: 360 }}
+            transition={{ duration: 0.6 }}
+            className="text-4xl mb-3"
+          >
+            {icon}
+          </motion.div>
           <h3 className="font-semibold text-gray-800">{category}</h3>
-        </Link>
+        </MotionLink>
       ))}
     </div>
   </div>

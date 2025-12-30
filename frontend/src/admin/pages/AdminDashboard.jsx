@@ -1,5 +1,6 @@
 // Admin Dashboard Page
 import React, { useEffect, useState, useContext } from 'react';
+import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
 import AdminSidebar from '../components/AdminSidebar';
@@ -89,18 +90,26 @@ function AdminDashboard() {
       <div className="flex-1 ml-64">
         <AdminNavbar />
         <main className="p-8 mt-16">
-          <div className="mb-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8"
+          >
             <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
             <p className="text-gray-600 mt-2">Welcome back, {user?.name || 'Admin'}!</p>
-          </div>
+          </motion.div>
 
           {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {statCards.map((stat, index) => {
               const Icon = stat.icon;
               return (
-                <div
+                <motion.div
                   key={index}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.06 }}
+                  whileHover={{ y: -2 }}
                   className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
                 >
                   <div className="flex items-center justify-between">
@@ -114,13 +123,18 @@ function AdminDashboard() {
                       <Icon className="w-6 h-6 text-white" />
                     </div>
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>
 
           {/* Quick Actions */}
-          <div className="bg-white rounded-lg shadow-md p-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="bg-white rounded-lg shadow-md p-6"
+          >
             <h2 className="text-xl font-semibold text-gray-800 mb-4">Quick Actions</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <button
@@ -145,7 +159,7 @@ function AdminDashboard() {
                 <p className="text-sm text-gray-600 mt-1">Track and fulfill customer orders</p>
               </button>
             </div>
-          </div>
+          </motion.div>
         </main>
       </div>
     </div>
