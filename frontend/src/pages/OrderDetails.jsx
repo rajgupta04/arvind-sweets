@@ -1,10 +1,10 @@
-import React, { useContext, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { CartContext } from "../context/CartContext";
 import Loader from "../components/Loader";
 import { getAdminThumbUrl } from '../lib/cloudinary.js';
-import { getOrderDetails } from "../services/orderService";
+import { getOrderDetails, submitOrderRatings } from "../services/orderService";
 import OrderStatusTracker from "./OrderStatusTracker";
 import LiveTrackingMap from "../components/LiveTrackingMap";
 import { createSocket } from "../services/socket";
@@ -20,12 +20,20 @@ export default function OrderDetails() {
   const { user, loading: authLoading } = useContext(AuthContext);
   const { addToCart, updateQuantity } = useContext(CartContext);
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [liveLocation, setLiveLocation] = useState(null);
   const [trackingActive, setTrackingActive] = useState(false);
   const [trackingMessage, setTrackingMessage] = useState('');
+
+  const ratingRef = useRef(null);
+  const [orderRating, setOrderRating] = useState(0);
+  const [deliveryRating, setDeliveryRating] = useState(0);
+  const [ratingSubmitting, setRatingSubmitting] = useState(false);
+  const [ratingError, setRatingError] = useState('');
+  const [ratingSaved, setRatingSaved] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -41,6 +49,15 @@ export default function OrderDetails() {
     } catch {}
     fetchOrder();
   }, [user, id]);
+
+  const wantsRate = useMemo(() => {
+    try {
+      const params = new URLSearchParams(location.search || '');
+      return params.get('rate') === '1';
+    } catch {
+      return false;
+    }
+  }, [location.search]);
 
   useEffect(() => {
     if (!order?._id) return;
@@ -139,6 +156,41 @@ export default function OrderDetails() {
     }
   };
 
+  useEffect(() => {
+    if (!order?._id) return;
+
+    const existingOrderRating = typeof order?.ratings?.order === 'number' ? order.ratings.order : 0;
+    const existingDeliveryRating = typeof order?.ratings?.delivery === 'number' ? order.ratings.delivery : 0;
+    setOrderRating(existingOrderRating);
+    setDeliveryRating(existingDeliveryRating);
+    setRatingSaved(Boolean(existingOrderRating && existingDeliveryRating));
+
+    if (wantsRate) {
+      setTimeout(() => {
+        ratingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 250);
+    }
+  }, [order?._id, wantsRate]);
+
+  const submitRatings = async () => {
+    setRatingError('');
+    if (orderRating < 1 || orderRating > 5 || deliveryRating < 1 || deliveryRating > 5) {
+      setRatingError('Please select both ratings (1 to 5).');
+      return;
+    }
+    try {
+      setRatingSubmitting(true);
+      await submitOrderRatings(order._id, { orderRating, deliveryRating });
+      setRatingSaved(true);
+      fetchOrder();
+    } catch (e) {
+      console.error('Submit rating failed', e);
+      setRatingError(e?.response?.data?.message || 'Failed to submit rating');
+    } finally {
+      setRatingSubmitting(false);
+    }
+  };
+
   const handleRepeatOrder = () => {
     if (!order || !Array.isArray(order.orderItems)) return;
     order.orderItems.forEach((item) => {
@@ -234,6 +286,47 @@ export default function OrderDetails() {
         <h2 className="text-lg font-semibold mb-4">Order Status</h2>
         <OrderStatusTracker currentStatus={order.orderStatus?.toLowerCase()} />
       </div>
+
+      {order?.orderStatus === 'Delivered' ? (
+        <div ref={ratingRef} className="bg-white rounded-xl shadow p-6 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">Rate your order</h2>
+            {ratingSaved ? (
+              <span className="text-sm px-3 py-1 rounded-full bg-green-50 text-green-700 border border-green-200">
+                Rated
+              </span>
+            ) : null}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <RatingBlock
+              title="Order rating"
+              value={orderRating}
+              onChange={setOrderRating}
+              disabled={ratingSaved || ratingSubmitting}
+            />
+            <RatingBlock
+              title="Delivery rating"
+              value={deliveryRating}
+              onChange={setDeliveryRating}
+              disabled={ratingSaved || ratingSubmitting}
+            />
+          </div>
+
+          {ratingError ? <p className="text-sm text-red-600">{ratingError}</p> : null}
+
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={submitRatings}
+              disabled={ratingSaved || ratingSubmitting}
+              className="px-4 py-2 rounded-lg bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-60"
+            >
+              {ratingSubmitting ? 'Submitting…' : ratingSaved ? 'Submitted' : 'Submit rating'}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {(order.orderStatus === 'Out for Delivery' || order.liveTrackingEnabled) && (
         <div className="bg-white rounded-xl shadow p-6 space-y-3">
@@ -410,6 +503,32 @@ export default function OrderDetails() {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function RatingBlock({ title, value, onChange, disabled }) {
+  return (
+    <div className="border rounded-xl p-4">
+      <p className="text-sm text-gray-600 mb-2">{title}</p>
+      <div className="flex items-center gap-1">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            onClick={() => onChange(n)}
+            disabled={disabled}
+            className={
+              (value >= n ? 'text-orange-500' : 'text-gray-300') +
+              ' text-2xl leading-none px-1 disabled:opacity-60'
+            }
+            aria-label={`${title}: ${n} star`}
+          >
+            ★
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-gray-500 mt-2">Tap to rate (1–5)</p>
     </div>
   );
 }

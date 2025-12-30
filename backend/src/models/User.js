@@ -106,6 +106,20 @@ const userSchema = new mongoose.Schema({
     enum: ['customer', 'admin', 'delivery_boy'],
     default: 'customer'
   },
+  deliveryRatings: {
+    avg: {
+      type: Number,
+      default: 0
+    },
+    count: {
+      type: Number,
+      default: 0
+    },
+    sum: {
+      type: Number,
+      default: 0
+    }
+  },
   resetPasswordToken: String,
   resetPasswordExpire: Date
 }, {

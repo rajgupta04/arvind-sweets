@@ -122,7 +122,12 @@ const orderSchema = new mongoose.Schema({
     default: false
   },
   paidAt: Date,
-  deliveredAt: Date
+  deliveredAt: Date,
+  ratings: {
+    order: { type: Number, min: 1, max: 5, default: null },
+    delivery: { type: Number, min: 1, max: 5, default: null },
+    ratedAt: { type: Date, default: null },
+  }
 }, {
   timestamps: true
 });

@@ -9,6 +9,7 @@ import {
   updateOrderToDelivered,
   updateOrderStatus,
   assignDeliveryBoyToOrder,
+  rateOrder,
   generateDeliveryTrackingLink,
   getOrderTracking,
   setOrderTrackingEnabled,
@@ -25,6 +26,7 @@ router.get('/myorders', protect, getMyOrders);
 router.get('/delivery/my-packages', protect, authorizeRoles('delivery_boy'), getMyDeliveryOrders);
 router.get('/latest', protect, admin, getLatestOrder);
 router.get('/:id/tracking', protect, getOrderTracking);
+router.post('/:id/ratings', protect, rateOrder);
 router.get('/:id', protect, getOrderById);
 router.get('/', protect, admin, getOrders);
 router.put('/:id/deliver', protect, admin, updateOrderToDelivered);

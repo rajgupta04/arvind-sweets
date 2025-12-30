@@ -249,6 +249,73 @@ export const getMyOrders = async (req, res) => {
   }
 };
 
+// @desc    Rate an order (two ratings: order + delivery)
+// @route   POST /api/orders/:id/ratings
+// @access  Private
+export const rateOrder = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+
+    const isOwner = String(order.user) === String(req.user?._id);
+    if (!isOwner) return res.status(403).json({ message: 'Not authorized' });
+
+    if (String(order.orderStatus) !== 'Delivered') {
+      return res.status(400).json({ message: 'You can rate only after delivery' });
+    }
+
+    const toInt = (v) => {
+      const n = Number(v);
+      if (!Number.isFinite(n)) return null;
+      return Math.round(n);
+    };
+
+    const orderRating = toInt(req.body?.orderRating);
+    const deliveryRating = toInt(req.body?.deliveryRating);
+
+    if (![1, 2, 3, 4, 5].includes(orderRating) || ![1, 2, 3, 4, 5].includes(deliveryRating)) {
+      return res.status(400).json({ message: 'Ratings must be numbers from 1 to 5' });
+    }
+
+    const alreadyRated =
+      typeof order?.ratings?.order === 'number' || typeof order?.ratings?.delivery === 'number';
+    if (alreadyRated) {
+      return res.status(400).json({ message: 'Order already rated' });
+    }
+
+    order.ratings = {
+      order: orderRating,
+      delivery: deliveryRating,
+      ratedAt: new Date(),
+    };
+
+    await order.save();
+
+    // Update delivery boy profile aggregate rating (best-effort)
+    try {
+      const deliveryBoyUserId = order.assignedDeliveryBoy ? String(order.assignedDeliveryBoy) : null;
+      if (deliveryBoyUserId) {
+        const deliveryUser = await User.findById(deliveryBoyUserId).select('role deliveryRatings');
+        if (deliveryUser && deliveryUser.role === 'delivery_boy') {
+          const prevCount = Number(deliveryUser.deliveryRatings?.count || 0);
+          const prevSum = Number(deliveryUser.deliveryRatings?.sum || 0);
+          const nextCount = prevCount + 1;
+          const nextSum = prevSum + deliveryRating;
+          const nextAvg = Math.round((nextSum / nextCount) * 100) / 100;
+          deliveryUser.deliveryRatings = { avg: nextAvg, count: nextCount, sum: nextSum };
+          await deliveryUser.save();
+        }
+      }
+    } catch (e) {
+      console.warn('Delivery boy rating aggregate update failed:', e?.message || e);
+    }
+
+    return res.status(200).json({ ratings: order.ratings });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || 'Failed to save rating' });
+  }
+};
+
 // @desc    Get all orders
 // @route   GET /api/orders
 // @access  Private/Admin

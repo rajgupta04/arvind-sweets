@@ -29,3 +29,7 @@ export const getLatestOrder = () => {
   return API.get('/orders/latest');
 };
 
+export const submitOrderRatings = (id, { orderRating, deliveryRating }) => {
+  return API.post(`/orders/${id}/ratings`, { orderRating, deliveryRating });
+};
+
