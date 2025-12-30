@@ -2,7 +2,7 @@
 import Order from '../models/Order.js';
 import DeliveryBoy from '../models/DeliveryBoy.js';
 import jwt from 'jsonwebtoken';
-import { notifyOwner } from '../utils/notifyOwner.js';
+import { notifyOwner, notifyOwnerForOrderCancellation } from '../utils/notifyOwner.js';
 import { sendOrderEmail } from '../utils/sendEmail.js';
 // ETA via haversine-based calculation will be computed inline in createOrder
 import Settings from '../models/Settings.js';
@@ -216,7 +216,8 @@ export const getOrderById = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
       .populate('user', 'name email')
-      .populate('assignedDeliveryBoy');
+      .populate('assignedDeliveryBoy')
+      .populate({ path: 'cancellation.cancelledBy', select: 'name email role' });
 
     if (order) {
       const isOwner = order.user._id.toString() === req.user._id.toString();
@@ -328,6 +329,7 @@ export const getOrders = async (req, res) => {
     const orders = await Order.find({})
       .populate('user', 'name email')
       .populate('assignedDeliveryBoy')
+      .populate({ path: 'cancellation.cancelledBy', select: 'name email role' })
       .sort({ createdAt: -1 });
     res.json(orders);
   } catch (error) {
@@ -450,18 +452,32 @@ export const cancelOrder = async (req, res) => {
 
     const updatedOrder = await order.save();
 
+    const populatedOrder = await Order.findById(updatedOrder._id)
+      .populate('user', 'name email')
+      .populate('assignedDeliveryBoy')
+      .populate({ path: 'cancellation.cancelledBy', select: 'name email role' });
+
     const io = req.app.get('io');
     if (io) {
-      io.to(`order_${order._id}`).emit('orderStatusUpdated', {
-        orderId: String(order._id),
-        orderStatus: 'Cancelled',
-      });
-      io.to(`order_${order._id}`).emit('trackingStopped', {
-        orderId: String(order._id),
+      const roomLegacy = `order_${order._id}`;
+      const roomSpec = `order:${String(order._id)}`;
+
+      io.to(roomLegacy).emit('orderStatusUpdated', { orderId: String(order._id), orderStatus: 'Cancelled' });
+      io.to(roomSpec).emit('orderStatusUpdated', { orderId: String(order._id), orderStatus: 'Cancelled' });
+
+      io.to(roomLegacy).emit('trackingStopped', { orderId: String(order._id) });
+      io.to(roomSpec).emit('trackingStopped', { orderId: String(order._id) });
+
+      // Admin-wide notification channel
+      io.to('admins').emit('adminOrderCancelled', {
+        order: populatedOrder?.toObject ? populatedOrder.toObject({ virtuals: false }) : populatedOrder,
       });
     }
 
-    return res.json(updatedOrder);
+    // Store-owner WhatsApp notification (optional)
+    notifyOwnerForOrderCancellation(populatedOrder || updatedOrder);
+
+    return res.json(populatedOrder || updatedOrder);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

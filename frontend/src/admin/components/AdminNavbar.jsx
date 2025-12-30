@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiMenu, FiBell, FiUser } from 'react-icons/fi';
 import { getLatestOrder } from '../services/adminApi';
+import { createSocket } from '../../services/socket';
 
 const formatAmount = (value = 0) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value);
@@ -14,6 +15,7 @@ function AdminNavbar({ onMenuClick }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [panelOpen, setPanelOpen] = useState(false);
   const lastBroadcastedId = useRef(localStorage.getItem('admin:lastBroadcastedOrder') || '');
+  const socketRef = useRef(null);
 
   useEffect(() => {
     let intervalId;
@@ -84,6 +86,61 @@ function AdminNavbar({ onMenuClick }) {
   }, [navigate]);
 
   useEffect(() => {
+    if (!user || user.role !== 'admin') return;
+
+    try {
+      socketRef.current?.disconnect();
+    } catch {}
+
+    const socket = createSocket();
+    socketRef.current = socket;
+
+    const triggerCancellationNotification = (order) => {
+      if (typeof window === 'undefined' || !('Notification' in window)) return;
+      const reason = order?.cancellation?.reasonLabel || 'Cancelled';
+
+      const notify = () => {
+        try {
+          new Notification('Order Cancelled', {
+            body: `Order ID: ${order?._id}\nReason: ${reason}`,
+            tag: `cancel:${order?._id}`,
+          });
+        } catch (error) {
+          console.warn('Notification error', error);
+        }
+      };
+
+      if (Notification.permission === 'granted') {
+        notify();
+      } else if (Notification.permission === 'default') {
+        Notification.requestPermission().then((permission) => {
+          if (permission === 'granted') {
+            notify();
+          }
+        });
+      }
+    };
+
+    socket.on('adminOrderCancelled', (payload) => {
+      const order = payload?.order;
+      if (!order?._id) return;
+
+      setRecentOrders((prev) => [order, ...prev.filter((o) => o._id !== order._id)].slice(0, 5));
+      setUnreadCount((prev) => prev + 1);
+      triggerCancellationNotification(order);
+
+      window.dispatchEvent(new CustomEvent('admin:order-cancelled', { detail: order }));
+    });
+
+    return () => {
+      try {
+        socket.disconnect();
+      } catch {}
+      socketRef.current = null;
+    };
+  }, [user?.role]);
+
+  useEffect(() => {
     const handleClickOutside = (event) => {
       if (!event.target.closest('.admin-notification-panel') && panelOpen) {
         setPanelOpen(false);
@@ -146,7 +203,18 @@ function AdminNavbar({ onMenuClick }) {
                     <p className="text-sm font-mono text-gray-800">{order._id}</p>
                     <p className="text-sm text-gray-600">
                       {order.shippingAddress?.name || 'Customer'} • {formatAmount(order.totalPrice)}
+                      {order.orderStatus === 'Cancelled' ? (
+                        <span className="text-red-600"> • Cancelled</span>
+                      ) : null}
                     </p>
+
+                    {order.orderStatus === 'Cancelled' && (order.cancellation?.reasonLabel || order.cancellation?.message) ? (
+                      <p className="text-xs text-gray-600 mt-1">
+                        {(order.cancellation?.reasonLabel || '').trim() || 'Cancelled'}
+                        {order.cancellation?.message ? ` • ${String(order.cancellation.message).slice(0, 60)}` : ''}
+                      </p>
+                    ) : null}
+
                     <p className="text-xs text-gray-500">
                       {new Date(order.createdAt).toLocaleString()}
                     </p>

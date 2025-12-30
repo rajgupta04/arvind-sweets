@@ -92,6 +92,9 @@ export function initSocket(httpServer, { app } = {}) {
         try {
           const u = await User.findById(id).select('role').lean();
           socket.data.user = { id: String(id), role: u?.role };
+          if (u?.role === 'admin') {
+            socket.join('admins');
+          }
           return;
         } catch {
           socket.data.user = { id: String(id), role: undefined };
@@ -100,6 +103,9 @@ export function initSocket(httpServer, { app } = {}) {
       }
 
       socket.data.user = { id: String(id), role };
+      if (role === 'admin') {
+        socket.join('admins');
+      }
     };
 
     const decoded = tryVerifyJwt(handshakeToken);

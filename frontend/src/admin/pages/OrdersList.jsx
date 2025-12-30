@@ -174,8 +174,21 @@ function OrdersList() {
       handleIncomingOrder(event.detail);
     };
 
+    const handleOrderCancelledEvent = (event) => {
+      const order = event.detail;
+      if (!order?._id) return;
+      const reason = order?.cancellation?.reasonLabel || 'Cancelled';
+      const extra = (order?.cancellation?.message || '').trim();
+      showToast(`Order Cancelled: ${order._id} • ${reason}${extra ? ` • ${extra}` : ''}`);
+      fetchOrders(true);
+    };
+
     window.addEventListener('admin:new-order', handleNewOrderEvent);
-    return () => window.removeEventListener('admin:new-order', handleNewOrderEvent);
+    window.addEventListener('admin:order-cancelled', handleOrderCancelledEvent);
+    return () => {
+      window.removeEventListener('admin:new-order', handleNewOrderEvent);
+      window.removeEventListener('admin:order-cancelled', handleOrderCancelledEvent);
+    };
   }, []);
 
   const handleStatusChange = async (orderId, status) => {
@@ -454,20 +467,91 @@ function OrdersList() {
                     </tr>
                   ) : (
                     orders.map((order) => (
-                      <tr key={order._id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 text-sm font-mono text-gray-900">{order._id}</td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm font-medium text-gray-900">{order.shippingAddress?.name || 'N/A'}</div>
-                          <div className="text-sm text-gray-500">{order.user?.email}</div>
+                      <tr
+                        key={order._id}
+                        className={
+                          order.orderStatus === 'Cancelled'
+                            ? 'bg-red-50 hover:bg-red-100'
+                            : order.orderStatus === 'Delivered'
+                              ? 'bg-green-50 hover:bg-green-100'
+                              : 'hover:bg-gray-50'
+                        }
+                      >
+                        <td
+                          className={
+                            `px-6 py-4 text-sm font-mono ` +
+                            (order.orderStatus === 'Cancelled'
+                              ? 'text-red-700 line-through'
+                              : order.orderStatus === 'Delivered'
+                                ? 'text-green-700'
+                                : 'text-gray-900')
+                          }
+                        >
+                          {order._id}
                         </td>
-                        <td className="px-6 py-4 text-sm font-semibold text-gray-900">{formatCurrency(order.totalPrice)}</td>
-                        <td className="px-6 py-4 text-sm text-gray-500">{order.paymentMethod}</td>
+                        <td className="px-6 py-4">
+                          <div
+                            className={
+                              `text-sm font-medium ` +
+                              (order.orderStatus === 'Cancelled'
+                                ? 'text-red-700 line-through'
+                                : order.orderStatus === 'Delivered'
+                                  ? 'text-green-700'
+                                  : 'text-gray-900')
+                            }
+                          >
+                            {order.shippingAddress?.name || 'N/A'}
+                          </div>
+                          <div
+                            className={
+                              `text-sm ` +
+                              (order.orderStatus === 'Cancelled'
+                                ? 'text-red-600 line-through'
+                                : order.orderStatus === 'Delivered'
+                                  ? 'text-green-600'
+                                  : 'text-gray-500')
+                            }
+                          >
+                            {order.user?.email}
+                          </div>
+                        </td>
+                        <td
+                          className={
+                            `px-6 py-4 text-sm font-semibold ` +
+                            (order.orderStatus === 'Cancelled'
+                              ? 'text-red-700 line-through'
+                              : order.orderStatus === 'Delivered'
+                                ? 'text-green-700'
+                                : 'text-gray-900')
+                          }
+                        >
+                          {formatCurrency(order.totalPrice)}
+                        </td>
+                        <td
+                          className={
+                            `px-6 py-4 text-sm ` +
+                            (order.orderStatus === 'Cancelled'
+                              ? 'text-red-600 line-through'
+                              : order.orderStatus === 'Delivered'
+                                ? 'text-green-600'
+                                : 'text-gray-500')
+                          }
+                        >
+                          {order.paymentMethod}
+                        </td>
                         <td className="px-6 py-4">{renderStatusBadge(order.paymentStatus || 'Pending')}</td>
                         <td className="px-6 py-4">
                           <select
                             value={order.orderStatus}
                             onChange={(e) => handleStatusChange(order._id, e.target.value)}
-                            className="border rounded-lg px-3 py-1 text-sm"
+                            className={
+                              `border rounded-lg px-3 py-1 text-sm ` +
+                              (order.orderStatus === 'Cancelled'
+                                ? 'border-red-200 text-red-700'
+                                : order.orderStatus === 'Delivered'
+                                  ? 'border-green-200 text-green-700'
+                                  : '')
+                            }
                             disabled={updatingStatusId === order._id}
                           >
                             {statusOptions.map((status) => (
@@ -477,13 +561,29 @@ function OrdersList() {
                             ))}
                           </select>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-500">
+                        <td
+                          className={
+                            `px-6 py-4 text-sm ` +
+                            (order.orderStatus === 'Cancelled'
+                              ? 'text-red-600 line-through'
+                              : order.orderStatus === 'Delivered'
+                                ? 'text-green-600'
+                                : 'text-gray-500')
+                          }
+                        >
                           {new Date(order.createdAt).toLocaleString()}
                         </td>
                         <td className="px-6 py-4 text-sm">
                           <button
                             onClick={() => openModal(order)}
-                            className="inline-flex items-center space-x-1 px-3 py-1 border rounded-lg text-gray-700 hover:bg-gray-100"
+                            className={
+                              `inline-flex items-center space-x-1 px-3 py-1 border rounded-lg hover:bg-gray-100 ` +
+                              (order.orderStatus === 'Cancelled'
+                                ? 'text-red-700 border-red-200'
+                                : order.orderStatus === 'Delivered'
+                                  ? 'text-green-700 border-green-200'
+                                  : 'text-gray-700')
+                            }
                           >
                             <FiEye className="w-4 h-4" />
                             <span>View</span>
@@ -533,6 +633,36 @@ function OrdersList() {
                   </p>
                 </div>
               </div>
+
+              {(selectedOrder.orderStatus === 'Cancelled' || selectedOrder.cancellation?.reasonLabel) && (
+                <div className="border rounded-lg p-4 bg-red-50">
+                  <h4 className="text-lg font-semibold mb-2 text-red-800">Cancellation</h4>
+                  <div className="text-sm text-gray-800 space-y-1">
+                    <div>
+                      <span className="font-semibold">Cancelled by:</span>{' '}
+                      {selectedOrder.cancellation?.cancelledBy?.name
+                        ? `${selectedOrder.cancellation.cancelledBy.name} (${selectedOrder.cancellation.cancelledBy.role || 'user'})`
+                        : 'User'}
+                    </div>
+                    <div>
+                      <span className="font-semibold">Reason:</span>{' '}
+                      {selectedOrder.cancellation?.reasonLabel || '—'}
+                    </div>
+                    {selectedOrder.cancellation?.message ? (
+                      <div>
+                        <span className="font-semibold">Message:</span>{' '}
+                        {selectedOrder.cancellation.message}
+                      </div>
+                    ) : null}
+                    {selectedOrder.cancelledAt ? (
+                      <div>
+                        <span className="font-semibold">Cancelled at:</span>{' '}
+                        {new Date(selectedOrder.cancelledAt).toLocaleString()}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <h4 className="text-lg font-semibold mb-2">Items</h4>

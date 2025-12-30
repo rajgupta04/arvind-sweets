@@ -49,6 +49,47 @@ export const notifyOwner = async (order) => {
   }
 };
 
+export const notifyOwnerForOrderCancellation = async (order) => {
+  try {
+    const phone = process.env.WHATSAPP_ADMIN_PHONE;
+    const apiKey = process.env.WHATSAPP_API_KEY;
+
+    if (!phone || !apiKey) {
+      console.warn('⚠️ WhatsApp cancellation notification skipped: missing WHATSAPP_ADMIN_PHONE or WHATSAPP_API_KEY');
+      return;
+    }
+
+    const customerName = order.shippingAddress?.name || 'Customer';
+    const reasonLabel = order.cancellation?.reasonLabel || 'Cancelled';
+    const extra = (order.cancellation?.message || '').trim();
+
+    const message =
+      `Order Cancelled: ${order._id}` +
+      `\nCustomer: ${customerName}` +
+      `\nReason: ${reasonLabel}` +
+      (extra ? `\nMessage: ${extra}` : '');
+
+    const normalizedPhone = phone.trim().startsWith('+') ? phone.trim() : `+${phone.trim().replace(/[^0-9]/g, '')}`;
+
+    const params = new URLSearchParams({
+      phone: normalizedPhone,
+      apikey: apiKey,
+      text: message,
+    });
+
+    const response = await fetch(`${CALLMEBOT_ENDPOINT}?${params.toString()}`);
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`CallMeBot error: ${response.status} ${body}`);
+    }
+
+    console.log('✅ WhatsApp cancellation notification sent to store owner');
+  } catch (error) {
+    console.error('❌ Failed to send WhatsApp cancellation notification:', error.message);
+  }
+};
+
 export const notifyOwnerForMessage = async (message) => {
   try {
     const phone = process.env.WHATSAPP_ADMIN_PHONE;
