@@ -28,6 +28,77 @@ import {
 const DEFAULT_DELIVERY_CHARGE = 50;
 const FREE_DELIVERY_THRESHOLD = 250;
 
+function haversineDistanceKm(aLat, aLng, bLat, bLng) {
+  const toRad = (v) => (v * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+  return R * c;
+}
+
+function timeToMinutes(hhmm) {
+  const m = String(hhmm || '').match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
+function nowMinutesInTimeZone(timeZone) {
+  try {
+    const fmt = new Intl.DateTimeFormat('en-GB', {
+      timeZone: timeZone || 'Asia/Kolkata',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const parts = fmt.formatToParts(new Date());
+    const h = Number(parts.find((p) => p.type === 'hour')?.value);
+    const min = Number(parts.find((p) => p.type === 'minute')?.value);
+    if (!Number.isFinite(h) || !Number.isFinite(min)) return null;
+    return h * 60 + min;
+  } catch {
+    return null;
+  }
+}
+
+function isNowInWindow(nowMin, startMin, endMin) {
+  if (nowMin == null || startMin == null || endMin == null) return false;
+  if (startMin === endMin) return true;
+  // Same-day window
+  if (endMin > startMin) return nowMin >= startMin && nowMin < endMin;
+  // Overnight window (e.g., 22:00 -> 02:00)
+  return nowMin >= startMin || nowMin < endMin;
+}
+
+function pickActiveRangeRule(deliveryRange) {
+  const tz = deliveryRange?.timezone || 'Asia/Kolkata';
+  const nowMin = nowMinutesInTimeZone(tz);
+  const rules = Array.isArray(deliveryRange?.rules) ? deliveryRange.rules : [];
+  for (const r of rules) {
+    const s = timeToMinutes(r?.startTime);
+    const e = timeToMinutes(r?.endTime);
+    if (isNowInWindow(nowMin, s, e)) return r;
+  }
+  return null;
+}
+
+function computeRangeDeliveryCharge({ itemsPrice, distanceKm, rule, rounding }) {
+  const includedKm = Number(rule?.includedKm) || 0;
+  const freeAboveAmount = Number(rule?.freeAboveAmount) || 0;
+  const perKmCharge = Number(rule?.perKmCharge) || 0;
+
+  if (itemsPrice >= freeAboveAmount) return 0;
+  const extraKm = Math.max(0, distanceKm - includedKm);
+  if (extraKm <= 0) return 0;
+
+  const extra = rounding === 'exact' ? extraKm : Math.ceil(extraKm);
+  const charge = extra * perKmCharge;
+  return Math.max(0, Math.round(charge));
+}
+
 function getFrontendBaseUrl() {
   const single = process.env.FRONTEND_URL;
   if (single) return String(single).trim().replace(/\/$/, '');
@@ -103,10 +174,77 @@ export const createOrder = async (req, res) => {
 
     computedItemsPrice = Math.round(computedItemsPrice * 100) / 100;
 
-    const computedDeliveryCharge =
-      deliveryType === 'Delivery'
-        ? (computedItemsPrice >= FREE_DELIVERY_THRESHOLD ? 0 : DEFAULT_DELIVERY_CHARGE)
-        : 0;
+    // Validate required delivery fields
+    if (deliveryType === 'Delivery') {
+      const phone = String(shippingAddress?.phone || '').trim();
+      const street = String(shippingAddress?.street || '').trim();
+      if (!phone) {
+        return res.status(400).json({ message: 'Phone number is required for delivery' });
+      }
+      if (!street) {
+        return res.status(400).json({ message: 'Address line 1 is required for delivery' });
+      }
+
+      const loc = shippingAddress?.location;
+      const uLat = typeof userLatitude === 'number' ? userLatitude : loc?.lat;
+      const uLng = typeof userLongitude === 'number' ? userLongitude : loc?.lng;
+      if (typeof uLat !== 'number' || typeof uLng !== 'number') {
+        return res.status(400).json({ message: 'Location is required. Please enable GPS / pick location on map.' });
+      }
+    }
+
+    // Compute delivery charge using settings (range rules) if enabled
+    let settingsForRange = null;
+    try {
+      settingsForRange = await Settings.findOne();
+    } catch {}
+
+    const deliveryRangeEnabled = Boolean(settingsForRange?.deliveryRange?.enabled);
+    const DELIVERY_UNAVAILABLE_MESSAGE = "Sorry, we aren't available in your area. Contact store for more information.";
+    let computedDeliveryCharge = 0;
+    let computedDistanceKm = null;
+
+    if (deliveryType === 'Delivery') {
+      const SHOP_LAT = Number(process.env.SHOP_LAT);
+      const SHOP_LNG = Number(process.env.SHOP_LNG);
+      const loc = shippingAddress?.location;
+      const uLat = typeof userLatitude === 'number' ? userLatitude : loc?.lat;
+      const uLng = typeof userLongitude === 'number' ? userLongitude : loc?.lng;
+
+      if (
+        typeof SHOP_LAT === 'number' && !Number.isNaN(SHOP_LAT) &&
+        typeof SHOP_LNG === 'number' && !Number.isNaN(SHOP_LNG) &&
+        typeof uLat === 'number' && typeof uLng === 'number'
+      ) {
+        computedDistanceKm = Number(haversineDistanceKm(SHOP_LAT, SHOP_LNG, uLat, uLng).toFixed(2));
+      }
+
+      if (deliveryRangeEnabled) {
+        if (computedDistanceKm == null) {
+          return res.status(400).json({ message: 'Unable to compute delivery distance. Please reselect your location.' });
+        }
+
+        const rule = pickActiveRangeRule(settingsForRange.deliveryRange);
+        if (!rule) {
+          return res.status(400).json({ message: DELIVERY_UNAVAILABLE_MESSAGE });
+        }
+
+        const maxKm = Number(rule?.maxKm);
+        if (Number.isFinite(maxKm) && computedDistanceKm > maxKm + 1e-6) {
+          return res.status(400).json({ message: DELIVERY_UNAVAILABLE_MESSAGE });
+        }
+
+        computedDeliveryCharge = computeRangeDeliveryCharge({
+          itemsPrice: computedItemsPrice,
+          distanceKm: computedDistanceKm,
+          rule,
+          rounding: settingsForRange?.deliveryRange?.rounding || 'ceil',
+        });
+      } else {
+        // Legacy flat delivery charge behavior
+        computedDeliveryCharge = computedItemsPrice >= FREE_DELIVERY_THRESHOLD ? 0 : DEFAULT_DELIVERY_CHARGE;
+      }
+    }
 
     let couponDoc = null;
     let couponSnapshot = { code: '', discountType: 'flat', discountValue: 0, discountAmount: 0 };
@@ -164,13 +302,9 @@ export const createOrder = async (req, res) => {
         typeof SHOP_LNG === 'number' && !Number.isNaN(SHOP_LNG) &&
         typeof uLat === 'number' && typeof uLng === 'number'
       ) {
-        const toRad = (v) => (v * Math.PI) / 180;
-        const R = 6371; // Earth radius in km
-        const dLat = toRad(uLat - SHOP_LAT);
-        const dLng = toRad(uLng - SHOP_LNG);
-        const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(SHOP_LAT)) * Math.cos(toRad(uLat)) * Math.sin(dLng / 2) ** 2;
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        const distanceKm = Number((R * c).toFixed(2));
+        const distanceKm = computedDistanceKm != null
+          ? computedDistanceKm
+          : Number(haversineDistanceKm(SHOP_LAT, SHOP_LNG, uLat, uLng).toFixed(2));
 
         let buffer = 10; // minutes default
         try {

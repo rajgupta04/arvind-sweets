@@ -11,8 +11,76 @@ import { listMyAddresses, upsertMyAddress } from '../services/addressService';
 import LocationPickerMap from '../components/LocationPickerMap';
 import { validateCoupon } from '../services/couponService';
 
-const DELIVERY_CHARGE = 50;
-const FREE_DELIVERY_THRESHOLD = 250;
+import { getPublicSettings } from '../services/settingsService';
+
+function haversineDistanceKm(aLat, aLng, bLat, bLng) {
+  const toRad = (v) => (v * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+  return R * c;
+}
+
+function timeToMinutes(hhmm) {
+  const m = String(hhmm || '').match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
+function nowMinutesInTimeZone(timeZone) {
+  try {
+    const fmt = new Intl.DateTimeFormat('en-GB', {
+      timeZone: timeZone || 'Asia/Kolkata',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const parts = fmt.formatToParts(new Date());
+    const h = Number(parts.find((p) => p.type === 'hour')?.value);
+    const min = Number(parts.find((p) => p.type === 'minute')?.value);
+    if (!Number.isFinite(h) || !Number.isFinite(min)) return null;
+    return h * 60 + min;
+  } catch {
+    return null;
+  }
+}
+
+function isNowInWindow(nowMin, startMin, endMin) {
+  if (nowMin == null || startMin == null || endMin == null) return false;
+  if (startMin === endMin) return true;
+  if (endMin > startMin) return nowMin >= startMin && nowMin < endMin;
+  return nowMin >= startMin || nowMin < endMin;
+}
+
+function pickActiveRangeRule(deliveryRange) {
+  const tz = deliveryRange?.timezone || 'Asia/Kolkata';
+  const nowMin = nowMinutesInTimeZone(tz);
+  const rules = Array.isArray(deliveryRange?.rules) ? deliveryRange.rules : [];
+  for (const r of rules) {
+    const s = timeToMinutes(r?.startTime);
+    const e = timeToMinutes(r?.endTime);
+    if (isNowInWindow(nowMin, s, e)) return r;
+  }
+  return null;
+}
+
+function computeRangeDeliveryCharge({ itemsPrice, distanceKm, rule, rounding }) {
+  const includedKm = Number(rule?.includedKm) || 0;
+  const freeAboveAmount = Number(rule?.freeAboveAmount) || 0;
+  const perKmCharge = Number(rule?.perKmCharge) || 0;
+
+  if (itemsPrice >= freeAboveAmount) return 0;
+  const extraKm = Math.max(0, distanceKm - includedKm);
+  if (extraKm <= 0) return 0;
+
+  const extra = rounding === 'exact' ? extraKm : Math.ceil(extraKm);
+  const charge = extra * perKmCharge;
+  return Math.max(0, Math.round(charge));
+}
 
 function Checkout() {
   const navigate = useNavigate();
@@ -22,6 +90,8 @@ function Checkout() {
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('COD');
   const [deliveryType, setDeliveryType] = useState('Delivery');
+  const [publicSettings, setPublicSettings] = useState(null);
+  const [publicSettingsLoaded, setPublicSettingsLoaded] = useState(false);
   const [shippingAddress, setShippingAddress] = useState({
     name: '',
     phone: '',
@@ -175,12 +245,55 @@ function Checkout() {
     if (deliveryType !== 'Delivery') return 0;
 
     const roundedItemsPrice = Math.round(itemsPrice * 100) / 100;
-    return roundedItemsPrice >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_CHARGE;
-  }, [deliveryType, itemsPrice]);
+    const dr = publicSettings?.deliveryRange;
+    const shop = publicSettings?.shop;
+    const hasRange = Boolean(dr?.enabled) && Array.isArray(dr?.rules) && dr.rules.length > 0;
+
+    const uLat = shippingAddress.location?.lat;
+    const uLng = shippingAddress.location?.lng;
+    const sLat = shop?.lat;
+    const sLng = shop?.lng;
+
+    if (
+      hasRange &&
+      typeof uLat === 'number' && typeof uLng === 'number' &&
+      typeof sLat === 'number' && typeof sLng === 'number'
+    ) {
+      const distanceKm = Number(haversineDistanceKm(sLat, sLng, uLat, uLng).toFixed(2));
+      const rule = pickActiveRangeRule(dr);
+      if (!rule) return 0;
+      const maxKm = Number(rule?.maxKm);
+      if (Number.isFinite(maxKm) && distanceKm > maxKm + 1e-6) return 0;
+      return computeRangeDeliveryCharge({
+        itemsPrice: roundedItemsPrice,
+        distanceKm,
+        rule,
+        rounding: dr?.rounding || 'ceil',
+      });
+    }
+
+    // Avoid showing legacy ₹50/₹250 when backend uses range rules.
+    if (!publicSettingsLoaded) return 0;
+    return 0;
+  }, [deliveryType, itemsPrice, publicSettings, publicSettingsLoaded, shippingAddress.location]);
   const [couponCode, setCouponCode] = useState('');
   const [couponApplying, setCouponApplying] = useState(false);
   const [couponError, setCouponError] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const s = await getPublicSettings();
+        setPublicSettings(s || null);
+      } catch {
+        setPublicSettings(null);
+      } finally {
+        setPublicSettingsLoaded(true);
+      }
+    };
+    load();
+  }, []);
 
   useEffect(() => {
     // If cart/delivery changes, re-apply should happen explicitly.
@@ -240,6 +353,12 @@ function Checkout() {
     if (deliveryType === 'Delivery') {
       if (!shippingAddress.street || !shippingAddress.city || !shippingAddress.state || !shippingAddress.pincode) {
         alert('Please fill in the full delivery address.');
+        return;
+      }
+
+      if (typeof shippingAddress.location?.lat !== 'number' || typeof shippingAddress.location?.lng !== 'number') {
+        alert('Please select your location on the map (Use My Location is required).');
+        setShowMapPicker(true);
         return;
       }
     }
@@ -315,7 +434,7 @@ function Checkout() {
                     className="w-5 h-5 text-orange-600"
                   />
                   <FiMapPin className="w-5 h-5" />
-                  <span>Home Delivery (₹50, Free on ₹250+)</span>
+                  <span>Home Delivery (charges based on distance/time)</span>
                 </label>
                 <label className="flex items-center space-x-3 cursor-pointer">
                   <input
