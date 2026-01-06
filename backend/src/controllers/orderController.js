@@ -11,6 +11,15 @@ import User from '../models/User.js';
 import Product from '../models/Product.js';
 import Coupon from '../models/Coupon.js';
 import {
+  getAdminWhatsAppTo,
+  getWhatsAppDefaultCountryCode,
+  isWhatsAppCloudEnabled,
+  normalizeWhatsAppCloudTo,
+  sendWhatsAppCloudDeliveryAssigned,
+  sendWhatsAppCloudOrderCancelled,
+  sendWhatsAppCloudOrderPlaced,
+} from '../utils/whatsappCloud.js';
+import {
   normalizeCouponCode,
   validateCouponOrThrow,
   recordCouponUsage,
@@ -198,6 +207,37 @@ export const createOrder = async (req, res) => {
 
     notifyOwner(populatedOrder);
     sendOrderEmail(populatedOrder);
+
+    // WhatsApp Cloud API (Meta test number) notifications (optional)
+    if (isWhatsAppCloudEnabled()) {
+      const defaultCC = getWhatsAppDefaultCountryCode();
+      const adminRaw = getAdminWhatsAppTo();
+      const userRaw = populatedOrder?.shippingAddress?.phone;
+
+      const adminTo = normalizeWhatsAppCloudTo(adminRaw, { defaultCountryCode: defaultCC });
+      const userTo = normalizeWhatsAppCloudTo(userRaw, { defaultCountryCode: defaultCC });
+
+      if (adminTo) {
+        sendWhatsAppCloudOrderPlaced({ order: populatedOrder, to: adminTo, audience: 'admin' })
+          .then((r) => {
+            if (!r?.ok) {
+              const msg = r?.data?.error?.message || r?.data?.error?.error_user_msg || 'unknown';
+              console.error('❌ WhatsApp Cloud send failed (admin order placed):', r?.status || '', msg);
+            }
+          })
+          .catch((e) => console.error('❌ WhatsApp Cloud send crashed (admin order placed):', e?.message || e));
+      }
+      if (userTo) {
+        sendWhatsAppCloudOrderPlaced({ order: populatedOrder, to: userTo, audience: 'user' })
+          .then((r) => {
+            if (!r?.ok) {
+              const msg = r?.data?.error?.message || r?.data?.error?.error_user_msg || 'unknown';
+              console.error('❌ WhatsApp Cloud send failed (user order placed):', r?.status || '', msg);
+            }
+          })
+          .catch((e) => console.error('❌ WhatsApp Cloud send crashed (user order placed):', e?.message || e));
+      }
+    }
 
     const responseBody = populatedOrder.toObject({ virtuals: false });
     if (responseBody.travelTimeMin != null && responseBody.deliveryTimeMinutes == null) {
@@ -454,7 +494,7 @@ export const cancelOrder = async (req, res) => {
 
     const populatedOrder = await Order.findById(updatedOrder._id)
       .populate('user', 'name email')
-      .populate('assignedDeliveryBoy')
+      .populate('assignedDeliveryBoy', 'name phone')
       .populate({ path: 'cancellation.cancelledBy', select: 'name email role' });
 
     const io = req.app.get('io');
@@ -476,6 +516,34 @@ export const cancelOrder = async (req, res) => {
 
     // Store-owner WhatsApp notification (optional)
     notifyOwnerForOrderCancellation(populatedOrder || updatedOrder);
+
+    // WhatsApp Cloud API (Meta test number) notifications (optional)
+    if (isWhatsAppCloudEnabled()) {
+      const defaultCC = getWhatsAppDefaultCountryCode();
+      const adminRaw = getAdminWhatsAppTo();
+      const userRaw = populatedOrder?.shippingAddress?.phone;
+      const deliveryRaw = populatedOrder?.assignedDeliveryBoy?.phone;
+
+      const adminTo = normalizeWhatsAppCloudTo(adminRaw, { defaultCountryCode: defaultCC });
+      const userTo = normalizeWhatsAppCloudTo(userRaw, { defaultCountryCode: defaultCC });
+      const deliveryTo = normalizeWhatsAppCloudTo(deliveryRaw, { defaultCountryCode: defaultCC });
+
+      if (adminTo) {
+        sendWhatsAppCloudOrderCancelled({ order: populatedOrder || updatedOrder, to: adminTo, audience: 'admin' }).catch((e) =>
+          console.error('❌ WhatsApp Cloud send failed (admin order cancelled):', e?.message || e)
+        );
+      }
+      if (userTo) {
+        sendWhatsAppCloudOrderCancelled({ order: populatedOrder || updatedOrder, to: userTo, audience: 'user' }).catch((e) =>
+          console.error('❌ WhatsApp Cloud send failed (user order cancelled):', e?.message || e)
+        );
+      }
+      if (deliveryTo) {
+        sendWhatsAppCloudOrderCancelled({ order: populatedOrder || updatedOrder, to: deliveryTo, audience: 'delivery_boy' }).catch((e) =>
+          console.error('❌ WhatsApp Cloud send failed (delivery order cancelled):', e?.message || e)
+        );
+      }
+    }
 
     return res.json(populatedOrder || updatedOrder);
   } catch (error) {
@@ -550,7 +618,7 @@ export const assignDeliveryBoyToOrder = async (req, res) => {
 
     const updated = await order.save();
     const populated = await updated.populate('user', 'name email');
-    await populated.populate('assignedDeliveryBoy');
+    await populated.populate('assignedDeliveryBoy', 'name phone');
 
     const io = req.app.get('io');
     if (io) {
@@ -573,6 +641,19 @@ export const assignDeliveryBoyToOrder = async (req, res) => {
       if (!populated.liveTrackingEnabled) {
         io.to(roomLegacy).emit('trackingStopped', { orderId: String(order._id) });
         io.to(roomSpec).emit('trackingStopped', { orderId: String(order._id) });
+      }
+    }
+
+    // WhatsApp Cloud API (Meta test number) notification to delivery boy (optional)
+    if (isWhatsAppCloudEnabled() && populated?.assignedDeliveryBoy?.phone) {
+      const defaultCC = getWhatsAppDefaultCountryCode();
+      const deliveryTo = normalizeWhatsAppCloudTo(populated.assignedDeliveryBoy.phone, { defaultCountryCode: defaultCC });
+      if (deliveryTo) {
+        sendWhatsAppCloudDeliveryAssigned({
+          order: populated,
+          deliveryBoy: populated.assignedDeliveryBoy,
+          to: deliveryTo,
+        }).catch((e) => console.error('❌ WhatsApp Cloud send failed (delivery assigned):', e?.message || e));
       }
     }
 
