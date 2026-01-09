@@ -55,6 +55,7 @@ function Footer() {
               <li><Link to="/products?category=Snacks" className="text-gray-300 hover:text-white">Snacks</Link></li>
               <li><Link to="/products?category=Seasonal" className="text-gray-300 hover:text-white">Seasonal</Link></li>
               <li><Link to="/products?category=Fastfood" className="text-gray-300 hover:text-white">Fastfood</Link></li>
+              <li><Link to="/products?category=Beverages" className="text-gray-300 hover:text-white">Beverages</Link></li>
             </ul>
           </div>
           

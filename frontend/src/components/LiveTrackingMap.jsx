@@ -40,6 +40,11 @@ function formatKm(distanceMeters) {
   return `${km.toFixed(1)} km`;
 }
 
+function formatCoord(value) {
+  if (!Number.isFinite(value)) return '—';
+  return Number(value).toFixed(7);
+}
+
 function normalizeHeadingDeg(deg) {
   if (!Number.isFinite(deg)) return 0;
   let v = deg % 360;
@@ -599,6 +604,10 @@ export default function LiveTrackingMap({
         <div>ETA: {etaSeconds ? formatEta(etaSeconds) : '—'}</div>
         <div>KM left: {distanceMeters != null ? formatKm(distanceMeters) : '—'}</div>
         <div>Status: {distanceMeters != null ? getStatusText(distanceMeters) : '—'}</div>
+        <div>
+          Lat/Lng:{' '}
+          {uiDeliveryPos ? `${formatCoord(uiDeliveryPos.lat)}, ${formatCoord(uiDeliveryPos.lng)}` : '—'}
+        </div>
         {openInGoogleMapsUrl && (
           <a
             href={openInGoogleMapsUrl}

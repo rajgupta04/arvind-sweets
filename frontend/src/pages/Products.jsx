@@ -14,15 +14,16 @@ function Products() {
   const [error, setError] = useState(null);
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [category, setCategory] = useState(searchParams.get('category') || '');
+  const [foodType, setFoodType] = useState(searchParams.get('foodType') || '');
   const [minPrice, setMinPrice] = useState(searchParams.get('minPrice') || '');
   const [maxPrice, setMaxPrice] = useState(searchParams.get('maxPrice') || '');
   const [showFilters, setShowFilters] = useState(false);
   const [didInitFromUrl, setDidInitFromUrl] = useState(false);
 
-  const categories = ['Bengali Sweets', 'Dry Sweets', 'Snacks', 'Seasonal', 'Fastfood', 'Special Offers'];
+  const categories = ['Bengali Sweets', 'Dry Sweets', 'Snacks', 'Seasonal', 'Fastfood', 'Beverages', 'Special Offers'];
 
   // Fetch products function
-  const fetchProducts = useCallback(async ({ nextCategory, nextSearch, nextMinPrice, nextMaxPrice, mode = 'update' } = {}) => {
+  const fetchProducts = useCallback(async ({ nextCategory, nextSearch, nextMinPrice, nextMaxPrice, nextFoodType, mode = 'update' } = {}) => {
     try {
       if (mode === 'initial') {
         setInitialLoading(true);
@@ -34,9 +35,11 @@ function Products() {
       const searchParam = (nextSearch ?? search) || '';
       const minPriceParam = (nextMinPrice ?? minPrice) || '';
       const maxPriceParam = (nextMaxPrice ?? maxPrice) || '';
+      const foodTypeParam = (nextFoodType ?? foodType) || '';
       
       const params = {};
       if (categoryParam) params.category = categoryParam;
+      if (categoryParam === 'Fastfood' && foodTypeParam) params.foodType = foodTypeParam;
       if (searchParam) params.search = searchParam;
       if (minPriceParam) params.minPrice = minPriceParam;
       if (maxPriceParam) params.maxPrice = maxPriceParam;
@@ -71,10 +74,12 @@ function Products() {
     const searchParam = searchParams.get('search') || '';
     const minPriceParam = searchParams.get('minPrice') || '';
     const maxPriceParam = searchParams.get('maxPrice') || '';
+    const foodTypeParam = searchParams.get('foodType') || '';
     
     // Update state from URL params
     setCategory(categoryParam);
     setSearch(searchParam);
+    setFoodType(foodTypeParam);
     setMinPrice(minPriceParam);
     setMaxPrice(maxPriceParam);
     setDidInitFromUrl(true);
@@ -89,6 +94,7 @@ function Products() {
       fetchProducts({
         nextCategory: category,
         nextSearch: search,
+        nextFoodType: foodType,
         nextMinPrice: minPrice,
         nextMaxPrice: maxPrice,
         mode: 'update',
@@ -96,7 +102,13 @@ function Products() {
     }, 300);
 
     return () => clearTimeout(t);
-  }, [category, didInitFromUrl, fetchProducts, maxPrice, minPrice, search]);
+  }, [category, didInitFromUrl, fetchProducts, foodType, maxPrice, minPrice, search]);
+
+  useEffect(() => {
+    if (category !== 'Fastfood' && foodType) {
+      setFoodType('');
+    }
+  }, [category, foodType]);
 
 
   const handleSearch = (e) => {
@@ -105,6 +117,7 @@ function Products() {
     fetchProducts({
       nextCategory: category,
       nextSearch: search,
+      nextFoodType: foodType,
       nextMinPrice: minPrice,
       nextMaxPrice: maxPrice,
       mode: 'update',
@@ -114,6 +127,7 @@ function Products() {
   const clearFilters = () => {
     setSearch('');
     setCategory('');
+    setFoodType('');
     setMinPrice('');
     setMaxPrice('');
     setSearchParams({});
@@ -174,6 +188,52 @@ function Products() {
                 ))}
               </select>
             </div>
+
+            {category === 'Fastfood' ? (
+              <div>
+                <label className="block text-sm font-medium mb-2">Food Type</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFoodType('')}
+                    className={
+                      "px-3 py-2 border rounded-lg text-sm transition " +
+                      (foodType === ''
+                        ? 'bg-orange-600 text-white border-orange-600'
+                        : 'bg-white hover:bg-gray-50')
+                    }
+                  >
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFoodType('veg')}
+                    className={
+                      "px-3 py-2 border rounded-lg text-sm transition " +
+                      (foodType === 'veg'
+                        ? 'bg-green-600 text-white border-green-600'
+                        : 'bg-white text-green-700 border-green-300 hover:bg-green-50')
+                    }
+                  >
+                    Veg
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFoodType('nonveg')}
+                    className={
+                      "px-3 py-2 border rounded-lg text-sm transition " +
+                      (foodType === 'nonveg'
+                        ? 'bg-red-600 text-white border-red-600'
+                        : 'bg-white text-red-700 border-red-300 hover:bg-red-50')
+                    }
+                  >
+                    Non-Veg
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div />
+            )}
 
             <div>
               <label className="block text-sm font-medium mb-2">Min Price (₹)</label>

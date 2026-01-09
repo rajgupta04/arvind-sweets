@@ -9,12 +9,16 @@ function ProductForm({ initialData = null, onSubmit, onCancel, isLoading = false
     name: '',
     description: '',
     category: 'Bengali Sweets',
+    foodType: '',
     price: '',
     discount: 0,
     weight: '250g',
     stock: '',
     isAvailable: true,
     isFeatured: false,
+    featuredRank: '',
+    isSuggested: false,
+    suggestedRank: '',
     images: []
   });
 
@@ -26,6 +30,7 @@ function ProductForm({ initialData = null, onSubmit, onCancel, isLoading = false
     'Snacks',
     'Seasonal',
     'Fastfood',
+    'Beverages',
     'Special Offers'
   ];
 
@@ -35,12 +40,16 @@ function ProductForm({ initialData = null, onSubmit, onCancel, isLoading = false
         name: initialData.name || '',
         description: initialData.description || '',
         category: initialData.category || 'Bengali Sweets',
+        foodType: initialData.foodType || '',
         price: initialData.price || '',
         discount: initialData.discount || 0,
         weight: initialData.weight || '250g',
         stock: initialData.stock || '',
         isAvailable: initialData.isAvailable !== undefined ? initialData.isAvailable : true,
         isFeatured: initialData.isFeatured || false,
+        featuredRank: initialData.featuredRank ?? '',
+        isSuggested: initialData.isSuggested || false,
+        suggestedRank: initialData.suggestedRank ?? '',
         images: initialData.images || []
       });
     }
@@ -53,6 +62,12 @@ function ProductForm({ initialData = null, onSubmit, onCancel, isLoading = false
       [name]: type === 'checkbox' ? checked : value
     }));
   };
+
+  useEffect(() => {
+    if (formData.category !== 'Fastfood' && formData.foodType) {
+      setFormData(prev => ({ ...prev, foodType: '' }));
+    }
+  }, [formData.category, formData.foodType]);
 
   const handleImageUpload = async (e) => {
     const files = Array.from(e.target.files);
@@ -105,8 +120,22 @@ function ProductForm({ initialData = null, onSubmit, onCancel, isLoading = false
       ...formData,
       price: Number(formData.price),
       stock: Number(formData.stock),
-      discount: Number(formData.discount)
+      discount: Number(formData.discount),
+      featuredRank:
+        formData.isFeatured && String(formData.featuredRank).trim() !== ''
+          ? Number(formData.featuredRank)
+          : null,
+      suggestedRank:
+        formData.isSuggested && String(formData.suggestedRank).trim() !== ''
+          ? Number(formData.suggestedRank)
+          : null,
     };
+
+    if (submitData.category !== 'Fastfood') {
+      delete submitData.foodType;
+    } else if (!submitData.foodType) {
+      delete submitData.foodType;
+    }
 
     onSubmit(submitData);
   };
@@ -315,7 +344,56 @@ function ProductForm({ initialData = null, onSubmit, onCancel, isLoading = false
           />
           <span className="text-sm font-medium text-gray-700">Featured</span>
         </label>
+
+        <label className="flex items-center space-x-2 cursor-pointer">
+          <input
+            type="checkbox"
+            name="isSuggested"
+            checked={formData.isSuggested}
+            onChange={handleInputChange}
+            className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+          />
+          <span className="text-sm font-medium text-gray-700">Suggested</span>
+        </label>
       </div>
+
+      {formData.isFeatured && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Featured Rank (1 = first)
+          </label>
+          <input
+            type="number"
+            name="featuredRank"
+            value={formData.featuredRank}
+            onChange={handleInputChange}
+            min="1"
+            step="1"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+            placeholder="e.g. 1"
+          />
+          <p className="mt-1 text-xs text-gray-500">Lower rank shows earlier in the Featured section.</p>
+        </div>
+      )}
+
+      {formData.isSuggested && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Suggested Rank (1 = first)
+          </label>
+          <input
+            type="number"
+            name="suggestedRank"
+            value={formData.suggestedRank}
+            onChange={handleInputChange}
+            min="1"
+            step="1"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+            placeholder="e.g. 1"
+          />
+          <p className="mt-1 text-xs text-gray-500">Controls ordering inside Cart recommendations.</p>
+        </div>
+      )}
 
       {/* Form Actions */}
       <div className="flex justify-end space-x-4 pt-4 border-t">

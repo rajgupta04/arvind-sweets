@@ -156,7 +156,12 @@ function ProductsList() {
                           <div className="text-sm font-medium text-gray-900">{product.name}</div>
                           {product.isFeatured && (
                             <span className="inline-block mt-1 px-2 py-0.5 text-xs bg-orange-100 text-orange-800 rounded">
-                              Featured
+                              Featured{Number.isFinite(Number(product.featuredRank)) ? ` #${Number(product.featuredRank)}` : ''}
+                            </span>
+                          )}
+                          {product.isSuggested && (
+                            <span className="inline-block mt-1 ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded">
+                              Suggested{Number.isFinite(Number(product.suggestedRank)) ? ` #${Number(product.suggestedRank)}` : ''}
                             </span>
                           )}
                         </td>

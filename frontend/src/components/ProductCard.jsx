@@ -1,5 +1,5 @@
 // ProductCard component
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useContext } from 'react';
 import { CartContext } from '../context/CartContext';
@@ -12,8 +12,15 @@ function ProductCard({ product }) {
   const [hoverIndex, setHoverIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState(null);
   const [touchEndX, setTouchEndX] = useState(null);
+  const [showImageBar, setShowImageBar] = useState(false);
 
   const images = product.images?.length > 0 ? product.images : [];
+
+  useEffect(() => {
+    if (!showImageBar) return;
+    const t = setTimeout(() => setShowImageBar(false), 900);
+    return () => clearTimeout(t);
+  }, [showImageBar, hoverIndex]);
 
   const handleAddToCart = (e) => {
     e.preventDefault();
@@ -45,9 +52,13 @@ function ProductCard({ product }) {
     const index = Math.floor(x / zoneWidth);
 
     setHoverIndex(index);
+    setShowImageBar(true);
   };
 
-  const handleMouseLeave = () => setHoverIndex(0);
+  const handleMouseLeave = () => {
+    setHoverIndex(0);
+    setShowImageBar(false);
+  };
 
   // 📱 Touch Swipe Logic (Mobile)
   const handleTouchStart = (e) => {
@@ -67,12 +78,12 @@ function ProductCard({ product }) {
     if (Math.abs(diff) > 50) {
       if (diff > 0) {
         // Swipe Left → Next Image
-        setHoverIndex((prev) =>
-          prev + 1 < images.length ? prev + 1 : prev
-        );
+        setHoverIndex((prev) => (prev + 1 < images.length ? prev + 1 : prev));
+        setShowImageBar(true);
       } else {
         // Swipe Right → Previous Image
         setHoverIndex((prev) => (prev - 1 >= 0 ? prev - 1 : 0));
+        setShowImageBar(true);
       }
     }
 
@@ -81,7 +92,7 @@ function ProductCard({ product }) {
   };
 
   return (
-    <Link to={`/products/${product._id}`} className="block">
+    <Link to={`/products/${product._id}`} className="block group">
       <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300">
 
         {/* IMAGE SECTION */}
@@ -116,6 +127,39 @@ function ProductCard({ product }) {
             <span className="absolute top-2 left-2 bg-orange-500 text-white px-2 py-1 rounded-md text-xs font-bold">
               Featured
             </span>
+          )}
+
+          {product.category === 'Fastfood' && (product.foodType === 'veg' || product.foodType === 'nonveg') ? (
+            <span
+              className={
+                "absolute bottom-2 left-2 px-2 py-1 rounded-md text-xs font-bold text-white " +
+                (product.foodType === 'veg' ? 'bg-green-600' : 'bg-red-600')
+              }
+            >
+              {product.foodType === 'veg' ? 'Veg' : 'Non-Veg'}
+            </span>
+          ) : null}
+
+          {/* HOVER/TAP IMAGE INDICATOR BAR */}
+          {images.length > 1 && (
+            <div
+              className={
+                "absolute left-2 right-2 bottom-2 flex gap-1 h-1 " +
+                "transition-opacity duration-200 " +
+                ((showImageBar ? "opacity-100" : "opacity-0") + " group-hover:opacity-100")
+              }
+              aria-hidden
+            >
+              {images.map((_, idx) => (
+                <span
+                  key={idx}
+                  className={
+                    "flex-1 rounded-full " +
+                    (idx === hoverIndex ? "bg-white" : "bg-white/40")
+                  }
+                />
+              ))}
+            </div>
           )}
         </div>
 

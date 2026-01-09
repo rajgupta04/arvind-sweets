@@ -11,6 +11,51 @@ const sampleProducts = sweetsData.map((sweet, index) => ({
   ...sweet
 }));
 
+const toBool = (v) => v === true || v === 'true' || v === 1 || v === '1';
+
+const toNumberOrNull = (v) => {
+  if (v === '' || v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+const normalizeProductBody = (body = {}) => {
+  const normalized = { ...body };
+
+  if ('isAvailable' in normalized) normalized.isAvailable = toBool(normalized.isAvailable);
+  if ('isFeatured' in normalized) normalized.isFeatured = toBool(normalized.isFeatured);
+  if ('isSuggested' in normalized) normalized.isSuggested = toBool(normalized.isSuggested);
+
+  if ('price' in normalized) {
+    const price = Number(normalized.price);
+    if (Number.isFinite(price)) normalized.price = price;
+  }
+  if ('stock' in normalized) {
+    const stock = Number(normalized.stock);
+    if (Number.isFinite(stock)) normalized.stock = stock;
+  }
+  if ('discount' in normalized) {
+    const discount = Number(normalized.discount);
+    if (Number.isFinite(discount)) normalized.discount = discount;
+  }
+
+  if ('featuredRank' in normalized) normalized.featuredRank = toNumberOrNull(normalized.featuredRank);
+  if (normalized.isFeatured !== true) normalized.featuredRank = null;
+
+  if ('suggestedRank' in normalized) normalized.suggestedRank = toNumberOrNull(normalized.suggestedRank);
+  if (normalized.isSuggested !== true) normalized.suggestedRank = null;
+
+  if (normalized.category !== 'Fastfood') {
+    delete normalized.foodType;
+  } else {
+    if (normalized.foodType === '' || normalized.foodType === null || normalized.foodType === undefined) {
+      delete normalized.foodType;
+    }
+  }
+
+  return normalized;
+};
+
 // @desc    Get all products
 // @route   GET /api/products
 // @access  Public
@@ -22,14 +67,20 @@ export const getProducts = async (req, res) => {
       let filteredProducts = [...sampleProducts];
       
       // Apply basic filters to sample data
-      const { category, featured, search } = req.query;
-      console.log('Query params:', { category, featured, search });
+      const { category, featured, suggested, search, foodType } = req.query;
+      console.log('Query params:', { category, featured, suggested, search, foodType });
       
       if (category) {
         filteredProducts = filteredProducts.filter(p => p.category === category);
       }
+      if (foodType) {
+        filteredProducts = filteredProducts.filter(p => p.foodType === foodType);
+      }
       if (featured === 'true') {
         filteredProducts = filteredProducts.filter(p => p.isFeatured);
+      }
+      if (suggested === 'true') {
+        filteredProducts = filteredProducts.filter(p => p.isSuggested);
       }
       if (search) {
         const searchLower = search.toLowerCase();
@@ -39,15 +90,43 @@ export const getProducts = async (req, res) => {
         );
       }
       
+      // Featured ranking: order by featuredRank asc (missing last), then createdAt desc
+      if (featured === 'true') {
+        filteredProducts.sort((a, b) => {
+          const ar = Number.isFinite(Number(a.featuredRank)) ? Number(a.featuredRank) : 9999;
+          const br = Number.isFinite(Number(b.featuredRank)) ? Number(b.featuredRank) : 9999;
+          if (ar !== br) return ar - br;
+
+          const ad = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bd = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return bd - ad;
+        });
+      }
+
+      // Suggested ranking: order by suggestedRank asc (missing last), then createdAt desc
+      if (suggested === 'true') {
+        filteredProducts.sort((a, b) => {
+          const ar = Number.isFinite(Number(a.suggestedRank)) ? Number(a.suggestedRank) : 9999;
+          const br = Number.isFinite(Number(b.suggestedRank)) ? Number(b.suggestedRank) : 9999;
+          if (ar !== br) return ar - br;
+
+          const ad = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bd = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return bd - ad;
+        });
+      }
+
       console.log('Returning', filteredProducts.length, 'products');
       return res.json(filteredProducts);
     }
 
-    const { category, search, minPrice, maxPrice, featured } = req.query;
+    const { category, search, minPrice, maxPrice, featured, suggested, foodType } = req.query;
     const query = {};
 
     if (category) query.category = category;
+    if (foodType) query.foodType = foodType;
     if (featured === 'true') query.isFeatured = true;
+    if (suggested === 'true') query.isSuggested = true;
     if (minPrice || maxPrice) {
       query.price = {};
       if (minPrice) query.price.$gte = Number(minPrice);
@@ -60,8 +139,28 @@ export const getProducts = async (req, res) => {
       ];
     }
 
+    if (featured === 'true') {
+      const products = await Product.aggregate([
+        { $match: query },
+        { $addFields: { _featuredRankSort: { $ifNull: ['$featuredRank', 9999] } } },
+        { $sort: { _featuredRankSort: 1, createdAt: -1 } },
+        { $project: { _featuredRankSort: 0 } },
+      ]);
+      return res.json(products);
+    }
+
+    if (suggested === 'true') {
+      const products = await Product.aggregate([
+        { $match: query },
+        { $addFields: { _suggestedRankSort: { $ifNull: ['$suggestedRank', 9999] } } },
+        { $sort: { _suggestedRankSort: 1, createdAt: -1 } },
+        { $project: { _suggestedRankSort: 0 } },
+      ]);
+      return res.json(products);
+    }
+
     const products = await Product.find(query).sort({ createdAt: -1 });
-    res.json(products);
+    return res.json(products);
   } catch (error) {
     console.error('Error fetching products:', error);
     // Return sample data on error
@@ -106,7 +205,7 @@ export const getProductById = async (req, res) => {
 // @access  Private/Admin
 export const createProduct = async (req, res) => {
   try {
-    const product = new Product(req.body);
+    const product = new Product(normalizeProductBody(req.body));
     const createdProduct = await product.save();
     res.status(201).json(createdProduct);
   } catch (error) {
@@ -122,7 +221,7 @@ export const updateProduct = async (req, res) => {
     const product = await Product.findById(req.params.id);
 
     if (product) {
-      Object.assign(product, req.body);
+      Object.assign(product, normalizeProductBody(req.body));
       const updatedProduct = await product.save();
       res.json(updatedProduct);
     } else {

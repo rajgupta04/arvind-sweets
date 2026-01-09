@@ -10,6 +10,17 @@ function normalizeNumber(v) {
   return Number.isFinite(n) ? n : NaN;
 }
 
+function normalizeBoolean(v) {
+  if (v === undefined) return undefined;
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'string') {
+    const s = v.trim().toLowerCase();
+    if (s === 'true') return true;
+    if (s === 'false') return false;
+  }
+  return undefined;
+}
+
 function validateDeliveryRange(range) {
   if (!range || typeof range !== 'object') return { ok: true, value: undefined };
 
@@ -98,6 +109,10 @@ export const getPublicSettings = async (req, res) => {
     res.json({
       deliveryBuffer: settings.deliveryBuffer,
       deliveryRange: settings.deliveryRange || { enabled: false, timezone: 'Asia/Kolkata', rounding: 'ceil', rules: [] },
+      ui: {
+        // Default to true if missing on older documents
+        showProductQuantity: settings.showProductQuantity !== false,
+      },
       shop: {
         lat: Number.isFinite(shopLat) ? shopLat : null,
         lng: Number.isFinite(shopLng) ? shopLng : null,
@@ -110,7 +125,7 @@ export const getPublicSettings = async (req, res) => {
 
 export const updateSettings = async (req, res) => {
   try {
-    const { deliveryBuffer, deliveryRange } = req.body;
+    const { deliveryBuffer, deliveryRange, showProductQuantity } = req.body;
 
     const patch = {};
     if (deliveryBuffer !== undefined) {
@@ -129,6 +144,14 @@ export const updateSettings = async (req, res) => {
       patch.deliveryRange = rangeValidation.value;
     }
 
+    const showProductQuantityValue = normalizeBoolean(showProductQuantity);
+    if (showProductQuantity !== undefined && showProductQuantityValue === undefined) {
+      return res.status(400).json({ message: 'showProductQuantity must be a boolean' });
+    }
+    if (showProductQuantityValue !== undefined) {
+      patch.showProductQuantity = showProductQuantityValue;
+    }
+
     if (Object.keys(patch).length === 0) {
       return res.status(400).json({ message: 'No valid settings to update' });
     }
@@ -139,6 +162,7 @@ export const updateSettings = async (req, res) => {
     } else {
       if (patch.deliveryBuffer !== undefined) settings.deliveryBuffer = patch.deliveryBuffer;
       if (patch.deliveryRange !== undefined) settings.deliveryRange = patch.deliveryRange;
+      if (patch.showProductQuantity !== undefined) settings.showProductQuantity = patch.showProductQuantity;
     }
     await settings.save();
     res.json(settings);

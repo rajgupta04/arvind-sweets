@@ -12,6 +12,7 @@ function DeliverySettings() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [buffer, setBuffer] = useState(10);
+  const [showProductQuantity, setShowProductQuantity] = useState(true);
   const [rangeEnabled, setRangeEnabled] = useState(false);
   const [rangeTimezone, setRangeTimezone] = useState('Asia/Kolkata');
   const [rangeRounding, setRangeRounding] = useState('ceil');
@@ -27,6 +28,7 @@ function DeliverySettings() {
       try {
         const s = await getSettings();
         setBuffer(Number(s.deliveryBuffer || 10));
+        setShowProductQuantity(s?.showProductQuantity !== false);
         const dr = s?.deliveryRange || {};
         setRangeEnabled(Boolean(dr.enabled));
         setRangeTimezone(String(dr.timezone || 'Asia/Kolkata'));
@@ -47,6 +49,7 @@ function DeliverySettings() {
       const value = Math.max(5, Math.min(30, Number(buffer)));
       await updateSettings({
         deliveryBuffer: value,
+        showProductQuantity: Boolean(showProductQuantity),
         deliveryRange: {
           enabled: Boolean(rangeEnabled),
           timezone: String(rangeTimezone || 'Asia/Kolkata').trim() || 'Asia/Kolkata',
@@ -134,6 +137,23 @@ function DeliverySettings() {
               onChange={(e) => setBuffer(e.target.value)}
               className="w-full mt-4"
             />
+
+            <div className="mt-6 pt-6 border-t">
+              <h2 className="text-lg font-bold text-gray-800 mb-2">Website UI</h2>
+              <p className="text-sm text-gray-600 mb-4">Control what customers see on the product page.</p>
+              <div className="flex items-center gap-3">
+                <input
+                  id="showProductQuantity"
+                  type="checkbox"
+                  checked={showProductQuantity}
+                  onChange={(e) => setShowProductQuantity(e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <label htmlFor="showProductQuantity" className="text-sm font-medium text-gray-700">
+                  Show product stock quantity (e.g., “12 available”)
+                </label>
+              </div>
+            </div>
             <div className="mt-6">
               <button
                 onClick={handleSave}

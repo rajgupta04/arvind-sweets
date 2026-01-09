@@ -58,7 +58,7 @@ function Home() {
       const response = await getProducts({ featured: 'true' });
       // Axios wraps response in data property
       const products = response.data || [];
-      setFeaturedProducts(Array.isArray(products) ? products.slice(0, 6) : []);
+      setFeaturedProducts(Array.isArray(products) ? products.slice(0, 12) : []);
     } catch (error) {
       console.error('Error fetching featured products:', error);
       // Set empty array on error so page still loads
@@ -202,6 +202,7 @@ function Home() {
         { category: "Snacks", icon: "🥟" },
         { category: "Seasonal", icon: "🎁" },
         { category: "Fastfood", icon: "🍔" },
+        { category: "Beverages", icon: "🥤" },
       ].map(({ category, icon }) => (
         <MotionLink
           key={category}

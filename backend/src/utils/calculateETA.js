@@ -1,8 +1,13 @@
 import fetch from 'node-fetch';
+import { getShopLocation } from './shopLocation.js';
 
 export default async function calculateETA(userLat, userLng) {
-  const SHOP_LAT = Number(process.env.SHOP_LAT);
-  const SHOP_LNG = Number(process.env.SHOP_LNG);
+  const shop = await getShopLocation();
+  const SHOP_LAT = Number(shop?.lat);
+  const SHOP_LNG = Number(shop?.lng);
+  if (!Number.isFinite(SHOP_LAT) || !Number.isFinite(SHOP_LNG)) {
+    throw new Error('Shop location is not configured');
+  }
 
   const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${SHOP_LNG},${SHOP_LAT};${userLng},${userLat}?overview=false`;
 

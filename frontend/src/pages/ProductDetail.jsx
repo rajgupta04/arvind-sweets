@@ -1,21 +1,27 @@
 // ProductDetail page component
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getProductById } from '../services/productService';
-import { useContext } from 'react';
 import { CartContext } from '../context/CartContext';
 import Loader from '../components/Loader';
 import { FiShoppingCart, FiArrowLeft } from 'react-icons/fi';
 import { getAdminThumbUrl, getOptimizedImageUrl } from '../lib/cloudinary.js';
+import { PublicSettingsContext } from '../context/PublicSettingsContext';
 
 function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addToCart } = useContext(CartContext);
+  const { publicSettings } = useContext(PublicSettingsContext);
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
+
+  const showProductQuantity = useMemo(() => {
+    const flag = publicSettings?.ui?.showProductQuantity;
+    return flag !== false;
+  }, [publicSettings]);
 
   useEffect(() => {
     fetchProduct();
@@ -166,7 +172,9 @@ function ProductDetail() {
                   +
                 </button>
               </div>
-              <span className="text-gray-600">({product.stock} available)</span>
+              {showProductQuantity && (
+                <span className="text-gray-600">({product.stock} available)</span>
+              )}
             </div>
           </div>
 

@@ -69,6 +69,33 @@
       animation: none;
     }
   }
+
+  .cart-confetti {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .cart-confetti__piece {
+    position: absolute;
+    top: -14px;
+    left: calc(var(--left) * 1%);
+    width: 8px;
+    height: 12px;
+    border-radius: 2px;
+    opacity: 0;
+    transform: translate3d(0, 0, 0) rotate(0deg);
+    animation: cart-confetti-fall 1200ms cubic-bezier(0.2, 0.8, 0.2, 1) var(--delay) forwards;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cart-confetti__piece {
+      animation: none;
+      display: none;
+    }
+  }
 }
 
 @keyframes pill-fire-rotate {
@@ -100,6 +127,17 @@
   100% {
     transform: rotate(12deg) scale(1.02);
     opacity: 0.4;
+  }
+}
+
+@keyframes cart-confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--drift), 60vh, 0) rotate(var(--rotate));
   }
 }
 

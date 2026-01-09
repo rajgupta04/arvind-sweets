@@ -26,6 +26,9 @@ function AdminProducts() {
     weight: '250g',
     ingredients: '',
     images: []
+    foodType: '',
+    isSuggested: false,
+    suggestedRank: '',
   });
 
   useEffect(() => {
@@ -218,11 +221,25 @@ function AdminProducts() {
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                     className="w-full px-3 py-2 border rounded-lg"
                   >
-                    {['Bengali Sweets', 'Dry Sweets', 'Snacks', 'Seasonal', 'Fastfood', 'Special Offers'].map(cat => (
+                    {['Bengali Sweets', 'Dry Sweets', 'Snacks', 'Seasonal', 'Fastfood', 'Beverages', 'Special Offers'].map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>
                 </div>
+                {formData.category === 'Fastfood' ? (
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Food Type</label>
+                    <select
+                      value={formData.foodType}
+                      onChange={(e) => setFormData({ ...formData, foodType: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg"
+                    >
+                      <option value="">Select</option>
+                      <option value="veg">Veg</option>
+                      <option value="nonveg">Non-Veg</option>
+                    </select>
+                  </div>
+                ) : null}
                 <div>
                   <label className="block text-sm font-medium mb-1">Price (₹)</label>
                   <input

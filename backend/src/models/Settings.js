@@ -31,6 +31,8 @@ const deliveryRangeSchema = new mongoose.Schema(
 const settingsSchema = new mongoose.Schema({
   deliveryBuffer: { type: Number, default: 10 },
   deliveryRange: { type: deliveryRangeSchema, default: () => ({}) },
+  // UI toggles
+  showProductQuantity: { type: Boolean, default: true },
 }, { timestamps: true });
 
 const Settings = mongoose.model('Settings', settingsSchema);
