@@ -33,8 +33,8 @@ function ProductDetail() {
       const response = await getProductById(id);
       const productData = response.data;
       setProduct(productData);
-      const opts = Array.isArray(productData?.pricingOptions) ? productData.pricingOptions : [];
-      setSelectedPricingOptionId(opts.length > 0 ? String(opts[0]._id) : '');
+      // Default to the main/base option (product.price)
+      setSelectedPricingOptionId('');
       if (productData && productData.images && productData.images.length > 0) {
         setSelectedImage(0);
       }
@@ -154,7 +154,12 @@ function ProductDetail() {
               <span className="text-3xl font-bold text-orange-600">₹{basePrice}</span>
             )}
             <p className="text-gray-600 mt-2">
-              {selectedPricingOption?.label ? <>Buying option: <span className="font-semibold">{selectedPricingOption.label}</span></> : <>Weight: {product.weight}</>}
+              Buying option:{' '}
+              <span className="font-semibold">
+                {selectedPricingOption?.label
+                  ? selectedPricingOption.label
+                  : (product.weight || 'Default')}
+              </span>
             </p>
           </div>
 
@@ -174,7 +179,7 @@ function ProductDetail() {
           )}
 
           <div className="mb-6">
-            {productPricingOptions.length > 0 && (
+            {(productPricingOptions.length > 0) && (
               <div className="flex items-center gap-4 mb-4">
                 <label className="font-semibold">Buying option:</label>
                 <select
@@ -182,6 +187,9 @@ function ProductDetail() {
                   onChange={(e) => setSelectedPricingOptionId(e.target.value)}
                   className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
+                  <option value="">
+                    {(product.weight || 'Default')} — ₹{Number(product.price).toFixed(0)}
+                  </option>
                   {productPricingOptions.map((o) => (
                     <option key={o._id} value={String(o._id)}>
                       {o.label} — ₹{Number(o.price).toFixed(0)}
