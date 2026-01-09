@@ -135,12 +135,28 @@ export const createOrder = async (req, res) => {
       return res.status(400).json({ message: 'No order items' });
     }
 
+    // Load settings (used for delivery range + cart goals)
+    let settingsForRange = null;
+    try {
+      settingsForRange = await Settings.findOne();
+    } catch {}
+
     // Compute prices server-side (do not trust client totals)
     const ids = Array.isArray(orderItems) ? orderItems.map((i) => i?.product).filter(Boolean) : [];
     const products = await Product.find({ _id: { $in: ids } }).select('name price discount images');
     const byId = new Map(products.map((p) => [String(p._id), p]));
 
+    const goals = settingsForRange?.cartGoals || {};
+    const giftEnabled = Boolean(goals?.freeGift?.enabled);
+    const giftThreshold = Number(goals?.freeGift?.threshold) || 0;
+    const giftMaxItems = Math.max(1, Math.min(5, Number(goals?.freeGift?.maxItems) || 1));
+    const giftBucket = Array.isArray(goals?.freeGift?.bucket) ? goals.freeGift.bucket.map((x) => String(x)) : [];
+    const giftBucketSet = new Set(giftBucket);
+
+    let computedPaidItemsPrice = 0;
     let computedItemsPrice = 0;
+    let giftCount = 0;
+
     const normalizedOrderItems = (Array.isArray(orderItems) ? orderItems : []).map((i) => {
       const productId = String(i?.product || '');
       const prod = byId.get(productId);
@@ -150,6 +166,8 @@ export const createOrder = async (req, res) => {
         throw err;
       }
 
+      const isGift = i?.isGift === true;
+
       const qty = Number(i?.quantity);
       if (!Number.isFinite(qty) || qty <= 0) {
         const err = new Error('Invalid item quantity');
@@ -157,10 +175,47 @@ export const createOrder = async (req, res) => {
         throw err;
       }
 
+      if (isGift) {
+        giftCount += 1;
+        if (qty !== 1) {
+          const err = new Error('Gift item quantity must be 1');
+          err.statusCode = 400;
+          throw err;
+        }
+        if (giftCount > giftMaxItems) {
+          const err = new Error('Too many gift items');
+          err.statusCode = 400;
+          throw err;
+        }
+        if (!giftEnabled) {
+          const err = new Error('Gift items are not enabled');
+          err.statusCode = 400;
+          throw err;
+        }
+        if (!giftBucketSet.has(productId)) {
+          const err = new Error('Selected gift item is not available');
+          err.statusCode = 400;
+          throw err;
+        }
+
+        // Price for gift line is always 0 (validated server-side)
+        const unitPrice = 0;
+        computedItemsPrice += unitPrice * qty;
+        return {
+          product: prod._id,
+          name: i?.name || prod.name,
+          price: unitPrice,
+          quantity: qty,
+          image: i?.image,
+          isGift: true,
+        };
+      }
+
       const basePrice = Number(prod.price) || 0;
       const disc = Number(prod.discount) || 0;
       const unit = disc > 0 ? basePrice - (basePrice * disc) / 100 : basePrice;
       const unitPrice = Math.round(unit * 100) / 100;
+      computedPaidItemsPrice += unitPrice * qty;
       computedItemsPrice += unitPrice * qty;
 
       return {
@@ -171,6 +226,15 @@ export const createOrder = async (req, res) => {
         image: i?.image,
       };
     });
+
+    if (giftCount > 0) {
+      if (!giftEnabled) {
+        return res.status(400).json({ message: 'Gift items are not enabled' });
+      }
+      if (computedPaidItemsPrice + 1e-6 < giftThreshold) {
+        return res.status(400).json({ message: `Gift unlock requires minimum ₹${giftThreshold}` });
+      }
+    }
 
     computedItemsPrice = Math.round(computedItemsPrice * 100) / 100;
 
@@ -194,11 +258,6 @@ export const createOrder = async (req, res) => {
     }
 
     // Compute delivery charge using settings (range rules) if enabled
-    let settingsForRange = null;
-    try {
-      settingsForRange = await Settings.findOne();
-    } catch {}
-
     const deliveryRangeEnabled = Boolean(settingsForRange?.deliveryRange?.enabled);
     const DELIVERY_UNAVAILABLE_MESSAGE = "Sorry, we aren't available in your area. Contact store for more information.";
     let computedDeliveryCharge = 0;

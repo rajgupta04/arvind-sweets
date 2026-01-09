@@ -4,6 +4,7 @@ import { AuthContext } from '../context/AuthContext';
 import AdminSidebar from './components/AdminSidebar';
 import AdminNavbar from './components/AdminNavbar';
 import { getSettings, updateSettings } from './services/adminApi';
+import { getAllProducts } from './services/adminApi';
 import { toast } from '../components/ui/use-toast';
 import { Toaster } from '../components/ui/toaster';
 
@@ -19,6 +20,15 @@ function DeliverySettings() {
   const [rangeRules, setRangeRules] = useState([]);
   const [saving, setSaving] = useState(false);
 
+  const [freeDeliveryGoalEnabled, setFreeDeliveryGoalEnabled] = useState(true);
+  const [freeDeliveryThreshold, setFreeDeliveryThreshold] = useState(250);
+  const [freeGiftGoalEnabled, setFreeGiftGoalEnabled] = useState(false);
+  const [freeGiftThreshold, setFreeGiftThreshold] = useState(500);
+  const [freeGiftMaxItems, setFreeGiftMaxItems] = useState(1);
+  const [freeGiftBucketIds, setFreeGiftBucketIds] = useState([]);
+  const [allProducts, setAllProducts] = useState([]);
+  const [giftSearch, setGiftSearch] = useState('');
+
   useEffect(() => {
     if (!user || user.role !== 'admin') {
       navigate('/');
@@ -26,7 +36,10 @@ function DeliverySettings() {
     }
     const fetch = async () => {
       try {
-        const s = await getSettings();
+        const [s, products] = await Promise.all([
+          getSettings(),
+          getAllProducts(),
+        ]);
         setBuffer(Number(s.deliveryBuffer || 10));
         setShowProductQuantity(s?.showProductQuantity !== false);
         const dr = s?.deliveryRange || {};
@@ -34,6 +47,16 @@ function DeliverySettings() {
         setRangeTimezone(String(dr.timezone || 'Asia/Kolkata'));
         setRangeRounding(String(dr.rounding || 'ceil'));
         setRangeRules(Array.isArray(dr.rules) ? dr.rules : []);
+
+        const cg = s?.cartGoals || {};
+        setFreeDeliveryGoalEnabled(cg?.freeDelivery?.enabled !== false);
+        setFreeDeliveryThreshold(Number(cg?.freeDelivery?.threshold) || 250);
+        setFreeGiftGoalEnabled(Boolean(cg?.freeGift?.enabled));
+        setFreeGiftThreshold(Number(cg?.freeGift?.threshold) || 500);
+        setFreeGiftMaxItems(Number(cg?.freeGift?.maxItems) || 1);
+        setFreeGiftBucketIds(Array.isArray(cg?.freeGift?.bucket) ? cg.freeGift.bucket.map((x) => String(x)) : []);
+
+        setAllProducts(Array.isArray(products) ? products : []);
       } catch (err) {
         console.error('Failed to load settings', err);
       } finally {
@@ -50,6 +73,18 @@ function DeliverySettings() {
       await updateSettings({
         deliveryBuffer: value,
         showProductQuantity: Boolean(showProductQuantity),
+        cartGoals: {
+          freeDelivery: {
+            enabled: Boolean(freeDeliveryGoalEnabled),
+            threshold: Number(freeDeliveryThreshold),
+          },
+          freeGift: {
+            enabled: Boolean(freeGiftGoalEnabled),
+            threshold: Number(freeGiftThreshold),
+            maxItems: Number(freeGiftMaxItems),
+            bucket: freeGiftBucketIds,
+          },
+        },
         deliveryRange: {
           enabled: Boolean(rangeEnabled),
           timezone: String(rangeTimezone || 'Asia/Kolkata').trim() || 'Asia/Kolkata',
@@ -72,6 +107,18 @@ function DeliverySettings() {
       setSaving(false);
     }
   };
+
+  const selectedGiftProducts = allProducts.filter((p) => p?._id && freeGiftBucketIds.includes(String(p._id)));
+  const giftCandidates = allProducts
+    .filter((p) => p?._id && !freeGiftBucketIds.includes(String(p._id)))
+    .filter((p) => {
+      const q = String(giftSearch || '').trim().toLowerCase();
+      if (!q) return true;
+      const name = String(p?.name || '').toLowerCase();
+      const cat = String(p?.category || '').toLowerCase();
+      return name.includes(q) || cat.includes(q);
+    })
+    .slice(0, 40);
 
   const handleAddRule = () => {
     setRangeRules((prev) => [
@@ -152,6 +199,139 @@ function DeliverySettings() {
                 <label htmlFor="showProductQuantity" className="text-sm font-medium text-gray-700">
                   Show product stock quantity (e.g., “12 available”)
                 </label>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-6 border-t">
+              <h2 className="text-lg font-bold text-gray-800 mb-2">Cart Progress Goals</h2>
+              <p className="text-sm text-gray-600 mb-4">Control the cart progress bar goals (free delivery, gift bucket).</p>
+
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <input
+                    id="freeDeliveryGoalEnabled"
+                    type="checkbox"
+                    checked={freeDeliveryGoalEnabled}
+                    onChange={(e) => setFreeDeliveryGoalEnabled(e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <label htmlFor="freeDeliveryGoalEnabled" className="text-sm font-medium text-gray-700">
+                    Enable free delivery goal
+                  </label>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Free delivery threshold (₹)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={freeDeliveryThreshold}
+                    onChange={(e) => setFreeDeliveryThreshold(e.target.value)}
+                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <input
+                    id="freeGiftGoalEnabled"
+                    type="checkbox"
+                    checked={freeGiftGoalEnabled}
+                    onChange={(e) => setFreeGiftGoalEnabled(e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <label htmlFor="freeGiftGoalEnabled" className="text-sm font-medium text-gray-700">
+                    Enable free add-on (gift) goal
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Gift unlock threshold (₹)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={freeGiftThreshold}
+                      onChange={(e) => setFreeGiftThreshold(e.target.value)}
+                      className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      disabled={!freeGiftGoalEnabled}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Max free items</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={5}
+                      value={freeGiftMaxItems}
+                      onChange={(e) => setFreeGiftMaxItems(e.target.value)}
+                      className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      disabled={!freeGiftGoalEnabled}
+                    />
+                  </div>
+                </div>
+
+                <div className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-gray-900">Gift bucket products</div>
+                      <div className="text-xs text-gray-600">Customers can pick a free add-on from this list after reaching the goal.</div>
+                    </div>
+                    <div className="text-xl" aria-hidden>🎁</div>
+                  </div>
+
+                  <div className="mt-3">
+                    <input
+                      value={giftSearch}
+                      onChange={(e) => setGiftSearch(e.target.value)}
+                      className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      placeholder="Search products to add..."
+                      disabled={!freeGiftGoalEnabled}
+                    />
+                  </div>
+
+                  {selectedGiftProducts.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {selectedGiftProducts.map((p) => (
+                        <button
+                          type="button"
+                          key={p._id}
+                          onClick={() => setFreeGiftBucketIds((prev) => prev.filter((id) => id !== String(p._id)))}
+                          className="px-3 py-1 rounded-full border text-sm hover:bg-gray-50"
+                          disabled={!freeGiftGoalEnabled}
+                          title="Remove"
+                        >
+                          {p.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="mt-3 space-y-2 max-h-64 overflow-auto">
+                    {giftCandidates.map((p) => (
+                      <label key={p._id} className={`flex items-center gap-3 p-2 rounded-lg border ${freeGiftGoalEnabled ? 'cursor-pointer' : 'opacity-50'}`}>
+                        <input
+                          type="checkbox"
+                          checked={freeGiftBucketIds.includes(String(p._id))}
+                          onChange={(e) => {
+                            const id = String(p._id);
+                            if (e.target.checked) {
+                              setFreeGiftBucketIds((prev) => Array.from(new Set([...prev, id])));
+                            } else {
+                              setFreeGiftBucketIds((prev) => prev.filter((x) => x !== id));
+                            }
+                          }}
+                          disabled={!freeGiftGoalEnabled}
+                        />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-gray-900 truncate">{p.name}</div>
+                          <div className="text-xs text-gray-500 truncate">{p.category}</div>
+                        </div>
+                      </label>
+                    ))}
+                    {giftCandidates.length === 0 && (
+                      <div className="text-sm text-gray-600">No products found.</div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
             <div className="mt-6">

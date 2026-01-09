@@ -28,11 +28,29 @@ const deliveryRangeSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const cartGoalsSchema = new mongoose.Schema(
+  {
+    freeDelivery: {
+      enabled: { type: Boolean, default: true },
+      threshold: { type: Number, default: 250 },
+    },
+    freeGift: {
+      enabled: { type: Boolean, default: false },
+      threshold: { type: Number, default: 500 },
+      bucket: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
+      maxItems: { type: Number, default: 1 },
+    },
+  },
+  { _id: false }
+);
+
 const settingsSchema = new mongoose.Schema({
   deliveryBuffer: { type: Number, default: 10 },
   deliveryRange: { type: deliveryRangeSchema, default: () => ({}) },
   // UI toggles
   showProductQuantity: { type: Boolean, default: true },
+  // Cart progress goals
+  cartGoals: { type: cartGoalsSchema, default: () => ({}) },
 }, { timestamps: true });
 
 const Settings = mongoose.model('Settings', settingsSchema);

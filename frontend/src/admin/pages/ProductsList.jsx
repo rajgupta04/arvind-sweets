@@ -161,7 +161,7 @@ function ProductsList() {
                           )}
                           {product.isSuggested && (
                             <span className="inline-block mt-1 ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded">
-                              Suggested{Number.isFinite(Number(product.suggestedRank)) ? ` #${Number(product.suggestedRank)}` : ''}
+                              Suggested
                             </span>
                           )}
                         </td>

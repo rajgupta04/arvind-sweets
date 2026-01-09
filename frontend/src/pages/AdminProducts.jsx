@@ -28,7 +28,7 @@ function AdminProducts() {
     images: []
     foodType: '',
     isSuggested: false,
-    suggestedRank: '',
+    suggestedWith: [],
   });
 
   useEffect(() => {

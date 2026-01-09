@@ -27,6 +27,29 @@ export const CartProvider = ({ children }) => {
     });
   };
 
+  const addGiftToCart = (product) => {
+    if (!product || !product._id) return;
+    const giftLineId = `gift:${product._id}`;
+    setCartItems((prevItems) => {
+      const already = prevItems.find((i) => i._id === giftLineId);
+      if (already) return prevItems;
+
+      // Price is shown as free in UI; server validates isGift when placing order.
+      return [
+        ...prevItems,
+        {
+          ...product,
+          _id: giftLineId,
+          product: product._id,
+          isGift: true,
+          price: 0,
+          discount: 0,
+          quantity: 1,
+        },
+      ];
+    });
+  };
+
   const removeFromCart = (productId) => {
     setCartItems(prevItems => prevItems.filter(item => item._id !== productId));
   };
@@ -38,7 +61,9 @@ export const CartProvider = ({ children }) => {
     }
     setCartItems(prevItems =>
       prevItems.map(item =>
-        item._id === productId ? { ...item, quantity } : item
+        item._id === productId
+          ? (item?.isGift ? { ...item, quantity: 1 } : { ...item, quantity })
+          : item
       )
     );
   };
@@ -59,6 +84,7 @@ export const CartProvider = ({ children }) => {
     <CartContext.Provider value={{
       cartItems,
       addToCart,
+      addGiftToCart,
       removeFromCart,
       updateQuantity,
       clearCart,

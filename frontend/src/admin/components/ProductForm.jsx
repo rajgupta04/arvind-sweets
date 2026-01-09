@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { uploadToCloudinary } from '../services/cloudinaryUpload';
 import { FiX, FiUpload, FiImage } from 'react-icons/fi';
 import { getOptimizedImageUrl } from '../../lib/cloudinary.js';
+import { getAllProducts } from '../services/adminApi';
 
 function ProductForm({ initialData = null, onSubmit, onCancel, isLoading = false }) {
   const [formData, setFormData] = useState({
@@ -18,9 +19,12 @@ function ProductForm({ initialData = null, onSubmit, onCancel, isLoading = false
     isFeatured: false,
     featuredRank: '',
     isSuggested: false,
-    suggestedRank: '',
+    suggestedWith: [],
     images: []
   });
+
+  const [allProducts, setAllProducts] = useState([]);
+  const [suggestSearch, setSuggestSearch] = useState('');
 
   const [uploadingImages, setUploadingImages] = useState(false);
 
@@ -49,11 +53,27 @@ function ProductForm({ initialData = null, onSubmit, onCancel, isLoading = false
         isFeatured: initialData.isFeatured || false,
         featuredRank: initialData.featuredRank ?? '',
         isSuggested: initialData.isSuggested || false,
-        suggestedRank: initialData.suggestedRank ?? '',
+        suggestedWith: Array.isArray(initialData.suggestedWith) ? initialData.suggestedWith : [],
         images: initialData.images || []
       });
     }
   }, [initialData]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const list = await getAllProducts();
+        if (!cancelled) setAllProducts(Array.isArray(list) ? list : []);
+      } catch {
+        if (!cancelled) setAllProducts([]);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -125,16 +145,16 @@ function ProductForm({ initialData = null, onSubmit, onCancel, isLoading = false
         formData.isFeatured && String(formData.featuredRank).trim() !== ''
           ? Number(formData.featuredRank)
           : null,
-      suggestedRank:
-        formData.isSuggested && String(formData.suggestedRank).trim() !== ''
-          ? Number(formData.suggestedRank)
-          : null,
     };
 
     if (submitData.category !== 'Fastfood') {
       delete submitData.foodType;
     } else if (!submitData.foodType) {
       delete submitData.foodType;
+    }
+
+    if (!submitData.isSuggested) {
+      submitData.suggestedWith = [];
     }
 
     onSubmit(submitData);
@@ -379,19 +399,92 @@ function ProductForm({ initialData = null, onSubmit, onCancel, isLoading = false
       {formData.isSuggested && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Suggested Rank (1 = first)
+            Suggested With (pick products)
           </label>
+
           <input
-            type="number"
-            name="suggestedRank"
-            value={formData.suggestedRank}
-            onChange={handleInputChange}
-            min="1"
-            step="1"
+            type="text"
+            value={suggestSearch}
+            onChange={(e) => setSuggestSearch(e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-            placeholder="e.g. 1"
+            placeholder="Search products to link..."
           />
-          <p className="mt-1 text-xs text-gray-500">Controls ordering inside Cart recommendations.</p>
+
+          {formData.suggestedWith.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {formData.suggestedWith.map((id) => {
+                const p = allProducts.find((x) => x._id === id);
+                return (
+                  <button
+                    type="button"
+                    key={id}
+                    onClick={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        suggestedWith: prev.suggestedWith.filter((x) => x !== id),
+                      }))
+                    }
+                    className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100 text-gray-800 text-xs hover:bg-gray-200"
+                    title="Remove"
+                  >
+                    <span className="truncate max-w-[180px]">{p?.name || id}</span>
+                    <span className="text-gray-500">×</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-gray-500">No linked products yet.</p>
+          )}
+
+          <div className="mt-3 max-h-48 overflow-auto border border-gray-200 rounded-lg">
+            {allProducts
+              .filter((p) => p && p._id)
+              .filter((p) => (initialData?._id ? p._id !== initialData._id : true))
+              .filter((p) => {
+                const q = suggestSearch.trim().toLowerCase();
+                if (!q) return true;
+                return (
+                  String(p.name || '').toLowerCase().includes(q) ||
+                  String(p.category || '').toLowerCase().includes(q)
+                );
+              })
+              .slice(0, 50)
+              .map((p) => {
+                const checked = formData.suggestedWith.includes(p._id);
+                return (
+                  <label
+                    key={p._id}
+                    className="flex items-center gap-3 px-3 py-2 border-b last:border-b-0 cursor-pointer hover:bg-gray-50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        setFormData((prev) => {
+                          const exists = prev.suggestedWith.includes(p._id);
+                          return {
+                            ...prev,
+                            suggestedWith: exists
+                              ? prev.suggestedWith.filter((x) => x !== p._id)
+                              : [...prev.suggestedWith, p._id],
+                          };
+                        });
+                      }}
+                      className="w-4 h-4"
+                    />
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-gray-900 truncate">{p.name}</div>
+                      <div className="text-xs text-gray-500 truncate">{p.category}</div>
+                    </div>
+                  </label>
+                );
+              })}
+          </div>
+
+          <p className="mt-2 text-xs text-gray-500">
+            These products will appear in Cart suggestions when this item is in cart.
+          </p>
         </div>
       )}
 

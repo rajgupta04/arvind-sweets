@@ -14,8 +14,8 @@ const productSchema = new mongoose.Schema({
   featuredRank: { type: Number, default: null },
   // Used for Cart "Items you may like" recommendations
   isSuggested: { type: Boolean, default: false },
-  // Lower comes first; missing values come last.
-  suggestedRank: { type: Number, default: null },
+  // Explicit cross-sell mapping: show these products when this product is in cart
+  suggestedWith: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
   discount: { type: Number, default: 0 },
   weight: String,
   ingredients: [String],

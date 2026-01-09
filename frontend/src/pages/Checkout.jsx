@@ -227,6 +227,7 @@ function Checkout() {
   };
 
   const computeItemPrice = (item) => {
+    if (item?.isGift) return 0;
     if (item.discount > 0) {
       return item.price - (item.price * item.discount) / 100;
     }
@@ -371,11 +372,12 @@ function Checkout() {
       setLoading(true);
 
       const orderItems = cartItems.map(item => ({
-        product: item._id,
+        product: item?.isGift ? item?.product : item._id,
         name: item.name,
         price: computeItemPrice(item),
         quantity: item.quantity,
-        image: Array.isArray(item.images) ? item.images[0] : item.images
+        image: Array.isArray(item.images) ? item.images[0] : item.images,
+        isGift: Boolean(item?.isGift)
       }));
 
       const orderPayload = {

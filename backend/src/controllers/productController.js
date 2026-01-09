@@ -42,8 +42,22 @@ const normalizeProductBody = (body = {}) => {
   if ('featuredRank' in normalized) normalized.featuredRank = toNumberOrNull(normalized.featuredRank);
   if (normalized.isFeatured !== true) normalized.featuredRank = null;
 
-  if ('suggestedRank' in normalized) normalized.suggestedRank = toNumberOrNull(normalized.suggestedRank);
-  if (normalized.isSuggested !== true) normalized.suggestedRank = null;
+  const toObjectIdStrings = (arr) => {
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .map((x) => (typeof x === 'string' ? x.trim() : String(x || '').trim()))
+      .filter(Boolean)
+      .filter((id) => mongoose.Types.ObjectId.isValid(id));
+  };
+
+  if ('suggestedWith' in normalized) {
+    const ids = toObjectIdStrings(normalized.suggestedWith);
+    normalized.suggestedWith = Array.from(new Set(ids));
+  }
+
+  if (normalized.isSuggested !== true) {
+    normalized.suggestedWith = [];
+  }
 
   if (normalized.category !== 'Fastfood') {
     delete normalized.foodType;
@@ -103,18 +117,7 @@ export const getProducts = async (req, res) => {
         });
       }
 
-      // Suggested ranking: order by suggestedRank asc (missing last), then createdAt desc
-      if (suggested === 'true') {
-        filteredProducts.sort((a, b) => {
-          const ar = Number.isFinite(Number(a.suggestedRank)) ? Number(a.suggestedRank) : 9999;
-          const br = Number.isFinite(Number(b.suggestedRank)) ? Number(b.suggestedRank) : 9999;
-          if (ar !== br) return ar - br;
-
-          const ad = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const bd = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return bd - ad;
-        });
-      }
+      // Suggested products: no rank-based ordering
 
       console.log('Returning', filteredProducts.length, 'products');
       return res.json(filteredProducts);
@@ -150,12 +153,7 @@ export const getProducts = async (req, res) => {
     }
 
     if (suggested === 'true') {
-      const products = await Product.aggregate([
-        { $match: query },
-        { $addFields: { _suggestedRankSort: { $ifNull: ['$suggestedRank', 9999] } } },
-        { $sort: { _suggestedRankSort: 1, createdAt: -1 } },
-        { $project: { _suggestedRankSort: 0 } },
-      ]);
+      const products = await Product.find(query).sort({ createdAt: -1 });
       return res.json(products);
     }
 

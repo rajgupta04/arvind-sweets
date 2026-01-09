@@ -1,4 +1,5 @@
 import Settings from '../models/Settings.js';
+import mongoose from 'mongoose';
 
 function isTimeString(v) {
   const s = String(v || '').trim();
@@ -19,6 +20,73 @@ function normalizeBoolean(v) {
     if (s === 'false') return false;
   }
   return undefined;
+}
+
+function normalizeObjectIdArray(arr) {
+  const ids = Array.isArray(arr) ? arr : [];
+  const unique = [];
+  const seen = new Set();
+  for (const raw of ids) {
+    const s = String(raw || '').trim();
+    if (!s) continue;
+    if (!mongoose.Types.ObjectId.isValid(s)) continue;
+    if (seen.has(s)) continue;
+    seen.add(s);
+    unique.push(s);
+  }
+  return unique;
+}
+
+function validateCartGoals(cartGoals) {
+  if (!cartGoals || typeof cartGoals !== 'object') return { ok: true, value: undefined };
+
+  const freeDeliveryIn = cartGoals?.freeDelivery;
+  const freeGiftIn = cartGoals?.freeGift;
+
+  const freeDeliveryEnabled = normalizeBoolean(freeDeliveryIn?.enabled);
+  const freeDeliveryThreshold = freeDeliveryIn?.threshold !== undefined ? normalizeNumber(freeDeliveryIn?.threshold) : undefined;
+
+  const freeGiftEnabled = normalizeBoolean(freeGiftIn?.enabled);
+  const freeGiftThreshold = freeGiftIn?.threshold !== undefined ? normalizeNumber(freeGiftIn?.threshold) : undefined;
+  const freeGiftBucket = freeGiftIn?.bucket !== undefined ? normalizeObjectIdArray(freeGiftIn?.bucket) : undefined;
+  const freeGiftMaxItems = freeGiftIn?.maxItems !== undefined ? normalizeNumber(freeGiftIn?.maxItems) : undefined;
+
+  if (freeDeliveryThreshold !== undefined) {
+    if (!Number.isFinite(freeDeliveryThreshold) || freeDeliveryThreshold < 0 || freeDeliveryThreshold > 100000) {
+      return { ok: false, message: 'cartGoals.freeDelivery.threshold must be between 0 and 100000' };
+    }
+  }
+
+  if (freeGiftThreshold !== undefined) {
+    if (!Number.isFinite(freeGiftThreshold) || freeGiftThreshold < 0 || freeGiftThreshold > 100000) {
+      return { ok: false, message: 'cartGoals.freeGift.threshold must be between 0 and 100000' };
+    }
+  }
+
+  if (freeGiftMaxItems !== undefined) {
+    if (!Number.isFinite(freeGiftMaxItems) || freeGiftMaxItems < 1 || freeGiftMaxItems > 5) {
+      return { ok: false, message: 'cartGoals.freeGift.maxItems must be between 1 and 5' };
+    }
+  }
+
+  const value = {
+    ...(freeDeliveryIn ? {
+      freeDelivery: {
+        ...(freeDeliveryEnabled !== undefined ? { enabled: freeDeliveryEnabled } : {}),
+        ...(freeDeliveryThreshold !== undefined ? { threshold: freeDeliveryThreshold } : {}),
+      },
+    } : {}),
+    ...(freeGiftIn ? {
+      freeGift: {
+        ...(freeGiftEnabled !== undefined ? { enabled: freeGiftEnabled } : {}),
+        ...(freeGiftThreshold !== undefined ? { threshold: freeGiftThreshold } : {}),
+        ...(freeGiftBucket !== undefined ? { bucket: freeGiftBucket } : {}),
+        ...(freeGiftMaxItems !== undefined ? { maxItems: freeGiftMaxItems } : {}),
+      },
+    } : {}),
+  };
+
+  return { ok: true, value };
 }
 
 function validateDeliveryRange(range) {
@@ -113,6 +181,18 @@ export const getPublicSettings = async (req, res) => {
         // Default to true if missing on older documents
         showProductQuantity: settings.showProductQuantity !== false,
       },
+      cartGoals: {
+        freeDelivery: {
+          enabled: settings?.cartGoals?.freeDelivery?.enabled !== false,
+          threshold: Number(settings?.cartGoals?.freeDelivery?.threshold) || 250,
+        },
+        freeGift: {
+          enabled: Boolean(settings?.cartGoals?.freeGift?.enabled),
+          threshold: Number(settings?.cartGoals?.freeGift?.threshold) || 500,
+          bucket: Array.isArray(settings?.cartGoals?.freeGift?.bucket) ? settings.cartGoals.freeGift.bucket : [],
+          maxItems: Number(settings?.cartGoals?.freeGift?.maxItems) || 1,
+        },
+      },
       shop: {
         lat: Number.isFinite(shopLat) ? shopLat : null,
         lng: Number.isFinite(shopLng) ? shopLng : null,
@@ -125,7 +205,7 @@ export const getPublicSettings = async (req, res) => {
 
 export const updateSettings = async (req, res) => {
   try {
-    const { deliveryBuffer, deliveryRange, showProductQuantity } = req.body;
+    const { deliveryBuffer, deliveryRange, showProductQuantity, cartGoals } = req.body;
 
     const patch = {};
     if (deliveryBuffer !== undefined) {
@@ -152,6 +232,14 @@ export const updateSettings = async (req, res) => {
       patch.showProductQuantity = showProductQuantityValue;
     }
 
+    const goalsValidation = validateCartGoals(cartGoals);
+    if (!goalsValidation.ok) {
+      return res.status(400).json({ message: goalsValidation.message || 'Invalid cartGoals' });
+    }
+    if (goalsValidation.value !== undefined && Object.keys(goalsValidation.value).length > 0) {
+      patch.cartGoals = goalsValidation.value;
+    }
+
     if (Object.keys(patch).length === 0) {
       return res.status(400).json({ message: 'No valid settings to update' });
     }
@@ -163,6 +251,20 @@ export const updateSettings = async (req, res) => {
       if (patch.deliveryBuffer !== undefined) settings.deliveryBuffer = patch.deliveryBuffer;
       if (patch.deliveryRange !== undefined) settings.deliveryRange = patch.deliveryRange;
       if (patch.showProductQuantity !== undefined) settings.showProductQuantity = patch.showProductQuantity;
+      if (patch.cartGoals !== undefined) {
+        settings.cartGoals = {
+          ...(settings.cartGoals?.toObject ? settings.cartGoals.toObject() : (settings.cartGoals || {})),
+          ...(patch.cartGoals || {}),
+          freeDelivery: {
+            ...(settings.cartGoals?.freeDelivery?.toObject ? settings.cartGoals.freeDelivery.toObject() : (settings.cartGoals?.freeDelivery || {})),
+            ...(patch.cartGoals?.freeDelivery || {}),
+          },
+          freeGift: {
+            ...(settings.cartGoals?.freeGift?.toObject ? settings.cartGoals.freeGift.toObject() : (settings.cartGoals?.freeGift || {})),
+            ...(patch.cartGoals?.freeGift || {}),
+          },
+        };
+      }
     }
     await settings.save();
     res.json(settings);

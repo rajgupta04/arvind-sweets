@@ -3,19 +3,39 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useContext } from 'react';
 import { CartContext } from '../context/CartContext';
+import { PublicSettingsContext } from '../context/PublicSettingsContext';
 import { FiTrash2, FiPlus, FiMinus } from 'react-icons/fi';
 import { getProductCardThumbUrl } from '../lib/cloudinary.js';
-import { getProducts } from '../services/productService';
+import { getProductById } from '../services/productService';
 
 const DELIVERY_CHARGE = 50;
-const FREE_DELIVERY_THRESHOLD = 250;
+const DEFAULT_FREE_DELIVERY_THRESHOLD = 250;
+const DEFAULT_FREE_GIFT_THRESHOLD = 500;
 
 function Cart() {
-  const { cartItems, updateQuantity, removeFromCart, getCartTotal, clearCart, addToCart } = useContext(CartContext);
+  const { cartItems, updateQuantity, removeFromCart, getCartTotal, clearCart, addToCart, addGiftToCart } = useContext(CartContext);
+  const { publicSettings } = useContext(PublicSettingsContext);
   const navigate = useNavigate();
 
   const [showConfetti, setShowConfetti] = useState(false);
   const wasFreeDeliveryUnlockedRef = useRef(false);
+
+  const [unlockToast, setUnlockToast] = useState(null); // { type: 'delivery'|'gift' }
+  const wasGiftUnlockedRef = useRef(false);
+
+  const freeDeliveryGoalEnabled = publicSettings?.cartGoals?.freeDelivery?.enabled !== false;
+  const freeDeliveryThreshold = Number(publicSettings?.cartGoals?.freeDelivery?.threshold) || DEFAULT_FREE_DELIVERY_THRESHOLD;
+
+  const freeGiftEnabled = Boolean(publicSettings?.cartGoals?.freeGift?.enabled);
+  const freeGiftThreshold = Number(publicSettings?.cartGoals?.freeGift?.threshold) || DEFAULT_FREE_GIFT_THRESHOLD;
+  const freeGiftBucketIds = useMemo(() => {
+    const bucket = publicSettings?.cartGoals?.freeGift?.bucket;
+    return Array.isArray(bucket) ? bucket.map((x) => String(x)).filter(Boolean) : [];
+  }, [publicSettings?.cartGoals?.freeGift?.bucket]);
+  const freeGiftMaxItems = Math.max(1, Math.min(5, Number(publicSettings?.cartGoals?.freeGift?.maxItems) || 1));
+
+  const paidCartItems = useMemo(() => cartItems.filter((i) => !i?.isGift), [cartItems]);
+  const giftCartItems = useMemo(() => cartItems.filter((i) => i?.isGift), [cartItems]);
 
   const mrpSubtotal = useMemo(() => {
     return cartItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 0), 0);
@@ -31,26 +51,67 @@ function Cart() {
     }, 0);
   }, [cartItems]);
 
+  const eligibleSubtotal = useMemo(() => {
+    return paidCartItems.reduce((sum, item) => {
+      const mrp = Number(item.price) || 0;
+      const discountPercent = Number(item.discount) || 0;
+      const unit = discountPercent > 0 ? mrp - (mrp * discountPercent) / 100 : mrp;
+      const unitRounded = Math.round(unit * 100) / 100;
+      return sum + unitRounded * (Number(item.quantity) || 0);
+    }, 0);
+  }, [paidCartItems]);
+
   const hasDiscount = mrpSubtotal - discountedSubtotal > 0.009;
-  const deliveryCharge = discountedSubtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_CHARGE;
+  const isFreeDeliveryUnlocked = freeDeliveryGoalEnabled && eligibleSubtotal >= freeDeliveryThreshold;
+  const deliveryCharge = isFreeDeliveryUnlocked ? 0 : DELIVERY_CHARGE;
   const totalPrice = discountedSubtotal + deliveryCharge;
 
-  const isFreeDeliveryUnlocked = discountedSubtotal >= FREE_DELIVERY_THRESHOLD;
+  const isGiftUnlocked = freeGiftEnabled && eligibleSubtotal >= freeGiftThreshold;
 
-  const freeDeliveryRemaining = Math.max(0, FREE_DELIVERY_THRESHOLD - discountedSubtotal);
-  const freeDeliveryProgressPct = FREE_DELIVERY_THRESHOLD > 0
-    ? Math.min(100, (discountedSubtotal / FREE_DELIVERY_THRESHOLD) * 100)
-    : 0;
+  const freeDeliveryRemaining = Math.max(0, freeDeliveryThreshold - eligibleSubtotal);
+  const freeGiftRemaining = Math.max(0, freeGiftThreshold - eligibleSubtotal);
+
+  const maxGoal = useMemo(() => {
+    const goals = [];
+    if (freeDeliveryGoalEnabled) goals.push(freeDeliveryThreshold);
+    if (freeGiftEnabled) goals.push(freeGiftThreshold);
+    return Math.max(...goals, 0);
+  }, [freeDeliveryGoalEnabled, freeDeliveryThreshold, freeGiftEnabled, freeGiftThreshold]);
+
+  const progressPct = maxGoal > 0 ? Math.min(100, (eligibleSubtotal / maxGoal) * 100) : 0;
+  const marker1Pct = (freeDeliveryGoalEnabled && maxGoal > 0)
+    ? Math.min(100, (freeDeliveryThreshold / maxGoal) * 100)
+    : null;
+  const marker2Pct = (freeGiftEnabled && maxGoal > 0)
+    ? Math.min(100, (freeGiftThreshold / maxGoal) * 100)
+    : null;
 
   useEffect(() => {
     const wasUnlocked = wasFreeDeliveryUnlockedRef.current;
     if (!wasUnlocked && isFreeDeliveryUnlocked) {
       setShowConfetti(true);
+      setUnlockToast({ type: 'delivery' });
       const t = setTimeout(() => setShowConfetti(false), 1400);
+      const t2 = setTimeout(() => setUnlockToast(null), 1100);
       return () => clearTimeout(t);
     }
     wasFreeDeliveryUnlockedRef.current = isFreeDeliveryUnlocked;
   }, [isFreeDeliveryUnlocked]);
+
+  useEffect(() => {
+    const wasUnlocked = wasGiftUnlockedRef.current;
+    if (!wasUnlocked && isGiftUnlocked) {
+      setShowConfetti(true);
+      setUnlockToast({ type: 'gift' });
+      const t = setTimeout(() => setShowConfetti(false), 1600);
+      const t2 = setTimeout(() => setUnlockToast(null), 1100);
+      return () => {
+        clearTimeout(t);
+        clearTimeout(t2);
+      };
+    }
+    wasGiftUnlockedRef.current = isGiftUnlocked;
+  }, [isGiftUnlocked]);
 
   const confettiPieces = useMemo(() => {
     if (!showConfetti) return [];
@@ -63,6 +124,43 @@ function Cart() {
       };
     });
   }, [showConfetti]);
+
+  const [giftBucketProducts, setGiftBucketProducts] = useState([]);
+  const [giftBucketLoading, setGiftBucketLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadGiftBucket = async () => {
+      if (!freeGiftEnabled || freeGiftBucketIds.length === 0) {
+        setGiftBucketProducts([]);
+        return;
+      }
+      setGiftBucketLoading(true);
+      try {
+        const raw = await Promise.all(
+          freeGiftBucketIds.map(async (id) => {
+            try {
+              const res = await getProductById(id);
+              return res.data;
+            } catch {
+              return null;
+            }
+          })
+        );
+        const cleaned = raw.filter((p) => p && p._id);
+        if (!cancelled) setGiftBucketProducts(cleaned);
+      } finally {
+        if (!cancelled) setGiftBucketLoading(false);
+      }
+    };
+    loadGiftBucket();
+    return () => {
+      cancelled = true;
+    };
+  }, [freeGiftEnabled, freeGiftBucketIds]);
+
+  const giftsInCartCount = giftCartItems.length;
+  const canChooseGift = isGiftUnlocked && giftsInCartCount < freeGiftMaxItems;
 
   const suggestionGroupsConfig = useMemo(() => {
     return [
@@ -95,55 +193,88 @@ function Cart() {
     return arr;
   };
 
-  const sortBySuggestedRank = (arr) => {
-    return arr.sort((a, b) => {
-      const ar = Number.isFinite(Number(a?.suggestedRank)) ? Number(a.suggestedRank) : 9999;
-      const br = Number.isFinite(Number(b?.suggestedRank)) ? Number(b.suggestedRank) : 9999;
-      if (ar !== br) return ar - br;
-      return 0;
-    });
-  };
-
   useEffect(() => {
     let cancelled = false;
 
     const loadSuggestions = async () => {
       setSuggestionsLoading(true);
       try {
-        const cartIds = new Set(cartItems.map((i) => i._id));
+        const paidIds = Array.from(new Set(paidCartItems.map((i) => i._id).filter(Boolean)));
+        const cartProductIdSet = new Set([
+          ...paidIds.map((x) => String(x)),
+          ...giftCartItems.map((i) => String(i?.product || '')).filter(Boolean),
+        ]);
 
-        const groups = await Promise.all(
-          suggestionGroupsConfig.map(async (group) => {
-            const responses = await Promise.all(
-              group.categories.map((cat) => getProducts({ category: cat, suggested: 'true' }))
-            );
-
-            const merged = responses
-              .flatMap((r) => (Array.isArray(r.data) ? r.data : []))
-              .filter((p) => p && p._id && !cartIds.has(p._id));
-
-            const seen = new Set();
-            const unique = [];
-            for (const p of merged) {
-              if (seen.has(p._id)) continue;
-              seen.add(p._id);
-              unique.push(p);
+        // Fetch latest product docs for cart items to read their suggestedWith links
+        const cartProducts = await Promise.all(
+          paidIds.map(async (id) => {
+            try {
+              const res = await getProductById(id);
+              return res.data;
+            } catch {
+              return null;
             }
-
-            const hasAnyRank = unique.some((p) => Number.isFinite(Number(p?.suggestedRank)));
-            if (hasAnyRank) {
-              sortBySuggestedRank(unique);
-            } else {
-              shuffleInPlace(unique);
-            }
-
-            return {
-              key: group.key,
-              title: group.title,
-              products: unique.slice(0, 3),
-            };
           })
         );
+
+        const suggestedIds = new Set();
+        for (const p of cartProducts) {
+          if (!p || p.isSuggested !== true) continue;
+          const links = Array.isArray(p.suggestedWith) ? p.suggestedWith : [];
+          for (const id of links) {
+            if (!id) continue;
+            const sid = String(id);
+            if (!cartProductIdSet.has(sid)) suggestedIds.add(sid);
+          }
+        }
+
+        const suggestedIdList = Array.from(suggestedIds);
+        if (suggestedIdList.length === 0) {
+          if (!cancelled) setSuggestionGroups([]);
+          return;
+        }
+
+        const suggestedProductsRaw = await Promise.all(
+          suggestedIdList.map(async (id) => {
+            try {
+              const res = await getProductById(id);
+              return res.data;
+            } catch {
+              return null;
+            }
+          })
+        );
+
+        const suggestedProducts = suggestedProductsRaw
+          .filter((p) => p && p._id && !cartProductIdSet.has(String(p._id)));
+
+        // Group into the existing 3 sections by category
+        const groupKeyForCategory = (cat) => {
+          if (cat === 'Beverages') return 'beverages';
+          if (cat === 'Snacks' || cat === 'Fastfood') return 'snacks';
+          return 'sweets';
+        };
+
+        const byGroup = {
+          sweets: [],
+          beverages: [],
+          snacks: [],
+        };
+
+        for (const p of suggestedProducts) {
+          const key = groupKeyForCategory(p.category);
+          byGroup[key].push(p);
+        }
+
+        for (const key of Object.keys(byGroup)) {
+          shuffleInPlace(byGroup[key]);
+        }
+
+        const groups = suggestionGroupsConfig.map((g) => ({
+          key: g.key,
+          title: g.title,
+          products: (byGroup[g.key] || []).slice(0, 3),
+        }));
 
         const nonEmpty = groups.filter((g) => g.products.length > 0);
         if (!cancelled) setSuggestionGroups(nonEmpty);
@@ -209,24 +340,54 @@ function Cart() {
         </div>
       )}
 
+      {unlockToast?.type && (
+        <div className="cart-unlock-toast" role="status" aria-live="polite">
+          <div className="bg-white border rounded-xl shadow-lg px-6 py-4">
+            {unlockToast.type === 'delivery' ? (
+              <div className="flex items-center gap-3">
+                <div className="text-2xl" aria-hidden>🚚</div>
+                <div>
+                  <div className="text-sm font-semibold text-gray-900">Unlocked</div>
+                  <div className="text-sm text-gray-700">Free delivery achieved!</div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <div className="text-2xl" aria-hidden>🎁</div>
+                <div>
+                  <div className="text-sm font-semibold text-gray-900">Unlocked</div>
+                  <div className="text-sm text-gray-700">Free add-on dish unlocked!</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <h1 className="text-3xl font-bold mb-8">Shopping Cart</h1>
 
       <div className="mb-6 bg-white rounded-lg shadow-md p-4 relative">
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
             <p className="text-sm font-semibold text-gray-900">Unlock Savings</p>
-            {freeDeliveryRemaining > 0 ? (
+            {!freeDeliveryGoalEnabled && !freeGiftEnabled ? (
+              <p className="text-sm text-gray-700 truncate">No active goals</p>
+            ) : freeDeliveryGoalEnabled && !isFreeDeliveryUnlocked ? (
               <p className="text-sm text-gray-700 truncate">
                 Add <span className="font-semibold text-orange-600">₹{freeDeliveryRemaining.toFixed(0)}</span> more to get <span className="font-semibold text-green-700">FREE DELIVERY</span>
               </p>
+            ) : freeGiftEnabled && !isGiftUnlocked ? (
+              <p className="text-sm text-gray-700 truncate">
+                Free delivery unlocked. Add <span className="font-semibold text-orange-600">₹{freeGiftRemaining.toFixed(0)}</span> more to unlock a <span className="font-semibold text-gray-900">FREE ADD-ON</span>
+              </p>
             ) : (
               <p className="text-sm text-gray-700 truncate">
-                Congrats! You got <span className="font-semibold text-green-700">FREE DELIVERY</span>
+                Congrats! You unlocked <span className="font-semibold text-green-700">FREE DELIVERY</span>{freeGiftEnabled ? <> + <span className="font-semibold text-gray-900">FREE ADD-ON</span></> : null}
               </p>
             )}
           </div>
           <div className="flex-shrink-0 text-2xl" aria-hidden>
-            {freeDeliveryRemaining > 0 ? '🚚' : '🎉'}
+            {isGiftUnlocked ? '🎁' : (freeDeliveryGoalEnabled && isFreeDeliveryUnlocked ? '🎉' : '🚚')}
           </div>
         </div>
 
@@ -234,16 +395,91 @@ function Cart() {
           <div className="h-2 w-full rounded-full bg-gray-200 overflow-hidden">
             <div
               className="h-full rounded-full bg-green-600 transition-all"
-              style={{ width: `${freeDeliveryProgressPct}%` }}
+              style={{ width: `${progressPct}%` }}
               aria-hidden
             />
           </div>
+          {(marker1Pct != null || marker2Pct != null) && (
+            <div className="relative -mt-2 h-4" aria-hidden>
+              {marker1Pct != null && (
+                <span
+                  className="absolute top-0 h-4 w-px bg-gray-400"
+                  style={{ left: `${marker1Pct}%` }}
+                />
+              )}
+              {marker2Pct != null && (
+                <span
+                  className="absolute top-0 h-4 w-px bg-gray-400"
+                  style={{ left: `${marker2Pct}%` }}
+                />
+              )}
+            </div>
+          )}
           <div className="mt-2 flex justify-between text-xs text-gray-500">
             <span>₹0</span>
-            <span>₹{FREE_DELIVERY_THRESHOLD} for free delivery</span>
+            <span>
+              {freeGiftEnabled ? `₹${freeGiftThreshold} for free add-on` : (freeDeliveryGoalEnabled ? `₹${freeDeliveryThreshold} for free delivery` : '')}
+            </span>
           </div>
         </div>
       </div>
+
+      {freeGiftEnabled && isGiftUnlocked && (
+        <div className="mb-6 bg-white rounded-lg shadow-md p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Free add-on unlocked</p>
+              <p className="text-sm text-gray-700">
+                {giftsInCartCount >= freeGiftMaxItems
+                  ? 'Free add-on already added in cart.'
+                  : 'Choose your free add-on dish from the bucket.'}
+              </p>
+            </div>
+            <div className="text-2xl" aria-hidden>🎁</div>
+          </div>
+
+          {canChooseGift && (
+            <div className="mt-4">
+              {giftBucketLoading ? (
+                <div className="text-sm text-gray-600">Loading gift options...</div>
+              ) : giftBucketProducts.length === 0 ? (
+                <div className="text-sm text-gray-600">No gift options configured yet.</div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {giftBucketProducts
+                    .filter((p) => {
+                      const inCartPaid = paidCartItems.some((i) => String(i._id) === String(p._id));
+                      const inCartGift = giftCartItems.some((i) => String(i.product) === String(p._id));
+                      return !inCartPaid && !inCartGift;
+                    })
+                    .map((p) => (
+                      <div key={p._id} className="border rounded-lg p-3 flex gap-3 items-center">
+                        <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden flex items-center justify-center flex-shrink-0">
+                          {Array.isArray(p.images) && p.images[0] ? (
+                            <img src={getProductCardThumbUrl(p.images[0])} alt={p.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-xl">🍽️</span>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold text-gray-900 truncate">{p.name}</div>
+                          <div className="text-xs text-gray-500 truncate">{p.category}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => addGiftToCart(p)}
+                          className="bg-gray-900 text-white px-3 py-2 rounded-lg text-sm hover:bg-black"
+                        >
+                          Add Free
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Cart Items */}
@@ -272,10 +508,17 @@ function Cart() {
                 <div className="flex-grow">
                   <h3 className="text-xl font-semibold mb-2">{item.name}</h3>
                   <p className="text-gray-600 text-sm mb-3">{item.category}</p>
+                  {item?.isGift && (
+                    <p className="text-xs font-semibold text-green-700 mb-2">FREE ADD-ON</p>
+                  )}
                   
                   <div className="flex items-center justify-between">
                     <div>
-                      {item.discount > 0 ? (
+                      {item?.isGift ? (
+                        <div>
+                          <span className="text-xl font-bold text-green-700">Free</span>
+                        </div>
+                      ) : item.discount > 0 ? (
                         <div>
                           <span className="text-xl font-bold text-orange-600">₹{(discountedPrice * item.quantity).toFixed(0)}</span>
                           <span className="text-sm text-gray-500 line-through ml-2">₹{(item.price * item.quantity).toFixed(0)}</span>
@@ -283,25 +526,29 @@ function Cart() {
                       ) : (
                         <span className="text-xl font-bold text-orange-600">₹{(item.price * item.quantity).toFixed(0)}</span>
                       )}
-                      <p className="text-sm text-gray-500">₹{discountedPrice.toFixed(0)} each</p>
+                      {!item?.isGift && (
+                        <p className="text-sm text-gray-500">₹{discountedPrice.toFixed(0)} each</p>
+                      )}
                     </div>
 
                     <div className="flex items-center space-x-4">
-                      <div className="flex items-center space-x-2 border rounded-lg">
-                        <button
-                          onClick={() => updateQuantity(item._id, item.quantity - 1)}
-                          className="p-2 hover:bg-gray-100"
-                        >
-                          <FiMinus className="w-4 h-4" />
-                        </button>
-                        <span className="px-4">{item.quantity}</span>
-                        <button
-                          onClick={() => updateQuantity(item._id, item.quantity + 1)}
-                          className="p-2 hover:bg-gray-100"
-                        >
-                          <FiPlus className="w-4 h-4" />
-                        </button>
-                      </div>
+                      {!item?.isGift && (
+                        <div className="flex items-center space-x-2 border rounded-lg">
+                          <button
+                            onClick={() => updateQuantity(item._id, item.quantity - 1)}
+                            className="p-2 hover:bg-gray-100 rounded-l-lg"
+                          >
+                            <FiMinus className="w-4 h-4" />
+                          </button>
+                          <span className="px-4 py-2 font-semibold">{item.quantity}</span>
+                          <button
+                            onClick={() => updateQuantity(item._id, item.quantity + 1)}
+                            className="p-2 hover:bg-gray-100 rounded-r-lg"
+                          >
+                            <FiPlus className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                       <button
                         onClick={() => removeFromCart(item._id)}
                         className="text-red-600 hover:text-red-700 p-2"
