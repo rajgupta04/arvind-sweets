@@ -96,6 +96,15 @@ function Cart() {
 
   const isGiftUnlocked = freeGiftEnabled && eligibleSubtotal >= freeGiftThreshold;
 
+  // If cart drops below gift threshold, remove previously added gift lines.
+  useEffect(() => {
+    if (giftCartItems.length === 0) return;
+    if (isGiftUnlocked) return;
+    giftCartItems.forEach((g) => {
+      if (g?._id) removeFromCart(g._id);
+    });
+  }, [giftCartItems, isGiftUnlocked, removeFromCart]);
+
   const freeDeliveryRemaining = Math.max(0, freeDeliveryThreshold - eligibleSubtotal);
   const freeGiftRemaining = Math.max(0, freeGiftThreshold - eligibleSubtotal);
 

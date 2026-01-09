@@ -368,6 +368,24 @@ function Checkout() {
       return;
     }
 
+    // Prevent checkout with a free gift if the cart is no longer eligible.
+    const hasGiftItems = cartItems.some((i) => i?.isGift);
+    if (hasGiftItems) {
+      if (!publicSettingsLoaded) {
+        alert('Please wait a moment while we load gift eligibility settings.');
+        return;
+      }
+      const giftEnabled = Boolean(publicSettings?.cartGoals?.freeGift?.enabled);
+      const giftThreshold = Number(publicSettings?.cartGoals?.freeGift?.threshold) || 0;
+      if (!giftEnabled || itemsPrice + 1e-6 < giftThreshold) {
+        alert(giftThreshold > 0
+          ? `Free add-on requires minimum ₹${giftThreshold}. Please remove the free add-on from cart.`
+          : 'Free add-on is not available. Please remove the free add-on from cart.'
+        );
+        return;
+      }
+    }
+
     try {
       setLoading(true);
 
