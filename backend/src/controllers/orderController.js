@@ -150,8 +150,36 @@ export const createOrder = async (req, res) => {
     const giftEnabled = Boolean(goals?.freeGift?.enabled);
     const giftThreshold = Number(goals?.freeGift?.threshold) || 0;
     const giftMaxItems = Math.max(1, Math.min(5, Number(goals?.freeGift?.maxItems) || 1));
-    const giftBucket = Array.isArray(goals?.freeGift?.bucket) ? goals.freeGift.bucket.map((x) => String(x)) : [];
-    const giftBucketSet = new Set(giftBucket);
+
+    const giftBucketEntries = (() => {
+      const bucket = goals?.freeGift?.bucket;
+      if (!Array.isArray(bucket)) return [];
+      const entries = bucket
+        .map((x) => {
+          if (!x) return null;
+          if (typeof x === 'string' || typeof x === 'number') {
+            return { productId: String(x), pricingOptionId: '' };
+          }
+          if (typeof x === 'object') {
+            const productId = x.product ? String(x.product) : '';
+            if (!productId) return null;
+            return {
+              productId,
+              pricingOptionId: x.pricingOptionId ? String(x.pricingOptionId) : '',
+            };
+          }
+          return null;
+        })
+        .filter(Boolean);
+
+      const byProductId = new Map();
+      for (const e of entries) {
+        if (!byProductId.has(e.productId)) byProductId.set(e.productId, e);
+      }
+      return Array.from(byProductId.values());
+    })();
+
+    const giftBucketByProductId = new Map(giftBucketEntries.map((e) => [String(e.productId), e]));
 
     let computedPaidItemsPrice = 0;
     let computedItemsPrice = 0;
@@ -192,10 +220,34 @@ export const createOrder = async (req, res) => {
           err.statusCode = 400;
           throw err;
         }
-        if (!giftBucketSet.has(productId)) {
+        const bucketEntry = giftBucketByProductId.get(productId);
+        if (!bucketEntry) {
           const err = new Error('Selected gift item is not available');
           err.statusCode = 400;
           throw err;
+        }
+
+        const requestedGiftOptionId = i?.pricingOptionId ? String(i.pricingOptionId).trim() : '';
+        const allowedGiftOptionId = bucketEntry?.pricingOptionId ? String(bucketEntry.pricingOptionId).trim() : '';
+
+        // If admin configured a specific option, require it. If not configured, allow only base (no option).
+        if (String(requestedGiftOptionId || '') !== String(allowedGiftOptionId || '')) {
+          const err = new Error('Selected gift option is not available');
+          err.statusCode = 400;
+          throw err;
+        }
+
+        let giftDisplayName = i?.name || prod.name;
+        if (allowedGiftOptionId) {
+          const options = Array.isArray(prod.pricingOptions) ? prod.pricingOptions : [];
+          const opt = options.find((x) => String(x?._id) === allowedGiftOptionId);
+          if (!opt) {
+            const err = new Error('Selected gift option is not available');
+            err.statusCode = 400;
+            throw err;
+          }
+          const label = String(opt.label || '').trim();
+          giftDisplayName = label ? `${prod.name} (${label})` : prod.name;
         }
 
         // Price for gift line is always 0 (validated server-side)
@@ -203,7 +255,7 @@ export const createOrder = async (req, res) => {
         computedItemsPrice += unitPrice * qty;
         return {
           product: prod._id,
-          name: i?.name || prod.name,
+          name: giftDisplayName,
           price: unitPrice,
           quantity: qty,
           image: i?.image,

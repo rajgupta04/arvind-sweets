@@ -37,7 +37,18 @@ const cartGoalsSchema = new mongoose.Schema(
     freeGift: {
       enabled: { type: Boolean, default: false },
       threshold: { type: Number, default: 500 },
-      bucket: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
+      bucket: {
+        type: [
+          new mongoose.Schema(
+            {
+              product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+              pricingOptionId: { type: mongoose.Schema.Types.ObjectId, required: false },
+            },
+            { _id: true }
+          ),
+        ],
+        default: [],
+      },
       maxItems: { type: Number, default: 1 },
     },
   },

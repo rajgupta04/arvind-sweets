@@ -25,9 +25,39 @@ function DeliverySettings() {
   const [freeGiftGoalEnabled, setFreeGiftGoalEnabled] = useState(false);
   const [freeGiftThreshold, setFreeGiftThreshold] = useState(500);
   const [freeGiftMaxItems, setFreeGiftMaxItems] = useState(1);
-  const [freeGiftBucketIds, setFreeGiftBucketIds] = useState([]);
+  const [freeGiftBucketEntries, setFreeGiftBucketEntries] = useState([]);
   const [allProducts, setAllProducts] = useState([]);
   const [giftSearch, setGiftSearch] = useState('');
+
+  const normalizeGiftBucketFromSettings = (bucket) => {
+    if (!Array.isArray(bucket)) return [];
+    const entries = bucket
+      .map((x) => {
+        if (!x) return null;
+        if (typeof x === 'string' || typeof x === 'number') {
+          return { productId: String(x), pricingOptionId: '' };
+        }
+        if (typeof x === 'object') {
+          const productId = x.product ? String(x.product) : '';
+          if (!productId) return null;
+          return {
+            productId,
+            pricingOptionId: x.pricingOptionId ? String(x.pricingOptionId) : '',
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    const seen = new Set();
+    const deduped = [];
+    for (const e of entries) {
+      if (seen.has(e.productId)) continue;
+      seen.add(e.productId);
+      deduped.push(e);
+    }
+    return deduped;
+  };
 
   useEffect(() => {
     if (!user || user.role !== 'admin') {
@@ -54,7 +84,7 @@ function DeliverySettings() {
         setFreeGiftGoalEnabled(Boolean(cg?.freeGift?.enabled));
         setFreeGiftThreshold(Number(cg?.freeGift?.threshold) || 500);
         setFreeGiftMaxItems(Number(cg?.freeGift?.maxItems) || 1);
-        setFreeGiftBucketIds(Array.isArray(cg?.freeGift?.bucket) ? cg.freeGift.bucket.map((x) => String(x)) : []);
+        setFreeGiftBucketEntries(normalizeGiftBucketFromSettings(cg?.freeGift?.bucket));
 
         setAllProducts(Array.isArray(products) ? products : []);
       } catch (err) {
@@ -82,7 +112,10 @@ function DeliverySettings() {
             enabled: Boolean(freeGiftGoalEnabled),
             threshold: Number(freeGiftThreshold),
             maxItems: Number(freeGiftMaxItems),
-            bucket: freeGiftBucketIds,
+            bucket: freeGiftBucketEntries.map((e) => ({
+              product: String(e.productId),
+              ...(e.pricingOptionId ? { pricingOptionId: String(e.pricingOptionId) } : {}),
+            })),
           },
         },
         deliveryRange: {
@@ -108,9 +141,16 @@ function DeliverySettings() {
     }
   };
 
-  const selectedGiftProducts = allProducts.filter((p) => p?._id && freeGiftBucketIds.includes(String(p._id)));
+  const selectedGiftProducts = freeGiftBucketEntries
+    .map((e) => {
+      const product = allProducts.find((p) => p?._id && String(p._id) === String(e.productId));
+      return product ? { entry: e, product } : null;
+    })
+    .filter(Boolean);
+
+  const selectedGiftProductIds = new Set(freeGiftBucketEntries.map((e) => String(e.productId)));
   const giftCandidates = allProducts
-    .filter((p) => p?._id && !freeGiftBucketIds.includes(String(p._id)))
+    .filter((p) => p?._id && !selectedGiftProductIds.has(String(p._id)))
     .filter((p) => {
       const q = String(giftSearch || '').trim().toLowerCase();
       if (!q) return true;
@@ -289,19 +329,61 @@ function DeliverySettings() {
                   </div>
 
                   {selectedGiftProducts.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {selectedGiftProducts.map((p) => (
-                        <button
-                          type="button"
-                          key={p._id}
-                          onClick={() => setFreeGiftBucketIds((prev) => prev.filter((id) => id !== String(p._id)))}
-                          className="px-3 py-1 rounded-full border text-sm hover:bg-gray-50"
-                          disabled={!freeGiftGoalEnabled}
-                          title="Remove"
-                        >
-                          {p.name}
-                        </button>
-                      ))}
+                    <div className="mt-3 space-y-2">
+                      {selectedGiftProducts.map(({ entry, product }) => {
+                        const baseOption = { id: '', label: 'Base / Default' };
+                        const productOptions = Array.isArray(product?.pricingOptions)
+                          ? product.pricingOptions
+                              .filter((o) => o && o._id && o.label)
+                              .map((o) => ({ id: String(o._id), label: String(o.label) }))
+                          : [];
+                        const optionChoices = [baseOption, ...productOptions];
+
+                        return (
+                          <div key={String(product._id)} className="flex items-center gap-3 p-2 rounded-lg border">
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-medium text-gray-900 truncate">{product.name}</div>
+                              <div className="text-xs text-gray-500 truncate">{product.category}</div>
+                            </div>
+
+                            <div className="w-48">
+                              <select
+                                value={entry.pricingOptionId || ''}
+                                onChange={(e) => {
+                                  const next = String(e.target.value || '');
+                                  setFreeGiftBucketEntries((prev) =>
+                                    prev.map((x) =>
+                                      String(x.productId) === String(entry.productId)
+                                        ? { ...x, pricingOptionId: next }
+                                        : x
+                                    )
+                                  );
+                                }}
+                                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                disabled={!freeGiftGoalEnabled}
+                              >
+                                {optionChoices.map((o) => (
+                                  <option key={o.id || 'base'} value={o.id}>
+                                    {o.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setFreeGiftBucketEntries((prev) => prev.filter((x) => String(x.productId) !== String(product._id)))
+                              }
+                              className="px-3 py-2 rounded-lg border text-sm hover:bg-gray-50"
+                              disabled={!freeGiftGoalEnabled}
+                              title="Remove"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
 
@@ -310,13 +392,16 @@ function DeliverySettings() {
                       <label key={p._id} className={`flex items-center gap-3 p-2 rounded-lg border ${freeGiftGoalEnabled ? 'cursor-pointer' : 'opacity-50'}`}>
                         <input
                           type="checkbox"
-                          checked={freeGiftBucketIds.includes(String(p._id))}
+                          checked={selectedGiftProductIds.has(String(p._id))}
                           onChange={(e) => {
                             const id = String(p._id);
                             if (e.target.checked) {
-                              setFreeGiftBucketIds((prev) => Array.from(new Set([...prev, id])));
+                              setFreeGiftBucketEntries((prev) => {
+                                if (prev.some((x) => String(x.productId) === id)) return prev;
+                                return [...prev, { productId: id, pricingOptionId: '' }];
+                              });
                             } else {
-                              setFreeGiftBucketIds((prev) => prev.filter((x) => x !== id));
+                              setFreeGiftBucketEntries((prev) => prev.filter((x) => String(x.productId) !== id));
                             }
                           }}
                           disabled={!freeGiftGoalEnabled}

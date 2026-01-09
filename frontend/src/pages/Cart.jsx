@@ -28,10 +28,38 @@ function Cart() {
 
   const freeGiftEnabled = Boolean(publicSettings?.cartGoals?.freeGift?.enabled);
   const freeGiftThreshold = Number(publicSettings?.cartGoals?.freeGift?.threshold) || DEFAULT_FREE_GIFT_THRESHOLD;
-  const freeGiftBucketIds = useMemo(() => {
+  const freeGiftBucketEntries = useMemo(() => {
     const bucket = publicSettings?.cartGoals?.freeGift?.bucket;
-    return Array.isArray(bucket) ? bucket.map((x) => String(x)).filter(Boolean) : [];
+    if (!Array.isArray(bucket)) return [];
+    const entries = bucket
+      .map((x) => {
+        if (!x) return null;
+        if (typeof x === 'string' || typeof x === 'number') {
+          return { productId: String(x), pricingOptionId: '' };
+        }
+        if (typeof x === 'object') {
+          const productId = x.product ? String(x.product) : '';
+          if (!productId) return null;
+          return {
+            productId,
+            pricingOptionId: x.pricingOptionId ? String(x.pricingOptionId) : '',
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    const seen = new Set();
+    const deduped = [];
+    for (const e of entries) {
+      if (seen.has(e.productId)) continue;
+      seen.add(e.productId);
+      deduped.push(e);
+    }
+    return deduped;
   }, [publicSettings?.cartGoals?.freeGift?.bucket]);
+
+  const freeGiftBucketIds = useMemo(() => freeGiftBucketEntries.map((e) => String(e.productId)), [freeGiftBucketEntries]);
   const freeGiftMaxItems = Math.max(1, Math.min(5, Number(publicSettings?.cartGoals?.freeGift?.maxItems) || 1));
 
   const paidCartItems = useMemo(() => cartItems.filter((i) => !i?.isGift), [cartItems]);
@@ -131,23 +159,37 @@ function Cart() {
   useEffect(() => {
     let cancelled = false;
     const loadGiftBucket = async () => {
-      if (!freeGiftEnabled || freeGiftBucketIds.length === 0) {
+      if (!freeGiftEnabled || freeGiftBucketEntries.length === 0) {
         setGiftBucketProducts([]);
         return;
       }
       setGiftBucketLoading(true);
       try {
         const raw = await Promise.all(
-          freeGiftBucketIds.map(async (id) => {
+          freeGiftBucketEntries.map(async (entry) => {
             try {
-              const res = await getProductById(id);
-              return res.data;
+              const res = await getProductById(entry.productId);
+              return { product: res.data, entry };
             } catch {
               return null;
             }
           })
         );
-        const cleaned = raw.filter((p) => p && p._id);
+        const cleaned = raw
+          .filter((x) => x && x.product && x.product._id)
+          .map(({ product, entry }) => {
+            const pricingOptionId = entry?.pricingOptionId ? String(entry.pricingOptionId) : '';
+            const optionLabel = pricingOptionId
+              ? (Array.isArray(product?.pricingOptions)
+                  ? String(product.pricingOptions.find((o) => o && String(o._id) === pricingOptionId)?.label || '')
+                  : '')
+              : '';
+            return {
+              ...product,
+              __giftPricingOptionId: pricingOptionId,
+              __giftPricingOptionLabel: optionLabel,
+            };
+          });
         if (!cancelled) setGiftBucketProducts(cleaned);
       } finally {
         if (!cancelled) setGiftBucketLoading(false);
@@ -157,7 +199,7 @@ function Cart() {
     return () => {
       cancelled = true;
     };
-  }, [freeGiftEnabled, freeGiftBucketIds]);
+  }, [freeGiftEnabled, freeGiftBucketEntries]);
 
   const giftsInCartCount = giftCartItems.length;
   const canChooseGift = isGiftUnlocked && giftsInCartCount < freeGiftMaxItems;
@@ -464,10 +506,16 @@ function Cart() {
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-semibold text-gray-900 truncate">{p.name}</div>
                           <div className="text-xs text-gray-500 truncate">{p.category}</div>
+                          {p.__giftPricingOptionLabel ? (
+                            <div className="text-xs text-gray-700 truncate">Option: <span className="font-semibold">{p.__giftPricingOptionLabel}</span></div>
+                          ) : null}
                         </div>
                         <button
                           type="button"
-                          onClick={() => addGiftToCart(p)}
+                          onClick={() => addGiftToCart(p, {
+                            pricingOptionId: p.__giftPricingOptionId || '',
+                            pricingOptionLabel: p.__giftPricingOptionLabel || '',
+                          })}
                           className="bg-gray-900 text-white px-3 py-2 rounded-lg text-sm hover:bg-black"
                         >
                           Add Free

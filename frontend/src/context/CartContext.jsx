@@ -59,9 +59,11 @@ export const CartProvider = ({ children }) => {
     });
   };
 
-  const addGiftToCart = (product) => {
+  const addGiftToCart = (product, options) => {
     if (!product || !product._id) return;
-    const giftLineId = `gift:${product._id}`;
+    const pricingOptionId = options?.pricingOptionId ? String(options.pricingOptionId) : '';
+    const pricingOptionLabel = options?.pricingOptionLabel ? String(options.pricingOptionLabel) : '';
+    const giftLineId = `gift:${product._id}@${pricingOptionId || 'base'}`;
     setCartItems((prevItems) => {
       const already = prevItems.find((i) => i._id === giftLineId);
       if (already) return prevItems;
@@ -75,6 +77,8 @@ export const CartProvider = ({ children }) => {
           product: product._id,
           productId: product._id,
           isGift: true,
+          ...(pricingOptionId ? { pricingOptionId } : {}),
+          ...(pricingOptionLabel ? { pricingOptionLabel } : {}),
           price: 0,
           discount: 0,
           quantity: 1,

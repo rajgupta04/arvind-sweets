@@ -37,6 +37,41 @@ function normalizeObjectIdArray(arr) {
   return unique;
 }
 
+function normalizeGiftBucket(bucket) {
+  // Accept either:
+  // - legacy: [productId, ...]
+  // - new: [{ product: productId, pricingOptionId?: optionId }, ...]
+  const out = [];
+  const seen = new Set();
+
+  if (!bucket) return out;
+
+  if (Array.isArray(bucket) && bucket.length > 0 && (typeof bucket[0] === 'string' || mongoose.Types.ObjectId.isValid(String(bucket[0] || '')))) {
+    const ids = normalizeObjectIdArray(bucket);
+    for (const pid of ids) {
+      const key = `${pid}:`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ product: pid });
+    }
+    return out;
+  }
+
+  const items = Array.isArray(bucket) ? bucket : [];
+  for (const item of items) {
+    const product = String(item?.product || '').trim();
+    if (!product || !mongoose.Types.ObjectId.isValid(product)) continue;
+    const pricingOptionId = item?.pricingOptionId ? String(item.pricingOptionId).trim() : '';
+    const validOptionId = pricingOptionId && mongoose.Types.ObjectId.isValid(pricingOptionId) ? pricingOptionId : undefined;
+    const key = `${product}:${validOptionId || ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ product, ...(validOptionId ? { pricingOptionId: validOptionId } : {}) });
+  }
+
+  return out;
+}
+
 function validateCartGoals(cartGoals) {
   if (!cartGoals || typeof cartGoals !== 'object') return { ok: true, value: undefined };
 
@@ -48,7 +83,7 @@ function validateCartGoals(cartGoals) {
 
   const freeGiftEnabled = normalizeBoolean(freeGiftIn?.enabled);
   const freeGiftThreshold = freeGiftIn?.threshold !== undefined ? normalizeNumber(freeGiftIn?.threshold) : undefined;
-  const freeGiftBucket = freeGiftIn?.bucket !== undefined ? normalizeObjectIdArray(freeGiftIn?.bucket) : undefined;
+  const freeGiftBucket = freeGiftIn?.bucket !== undefined ? normalizeGiftBucket(freeGiftIn?.bucket) : undefined;
   const freeGiftMaxItems = freeGiftIn?.maxItems !== undefined ? normalizeNumber(freeGiftIn?.maxItems) : undefined;
 
   if (freeDeliveryThreshold !== undefined) {
@@ -189,7 +224,9 @@ export const getPublicSettings = async (req, res) => {
         freeGift: {
           enabled: Boolean(settings?.cartGoals?.freeGift?.enabled),
           threshold: Number(settings?.cartGoals?.freeGift?.threshold) || 500,
-          bucket: Array.isArray(settings?.cartGoals?.freeGift?.bucket) ? settings.cartGoals.freeGift.bucket : [],
+          bucket: Array.isArray(settings?.cartGoals?.freeGift?.bucket)
+            ? settings.cartGoals.freeGift.bucket
+            : [],
           maxItems: Number(settings?.cartGoals?.freeGift?.maxItems) || 1,
         },
       },
