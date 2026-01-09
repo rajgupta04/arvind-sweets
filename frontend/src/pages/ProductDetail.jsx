@@ -17,6 +17,7 @@ function ProductDetail() {
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
+  const [selectedPricingOptionId, setSelectedPricingOptionId] = useState('');
 
   const showProductQuantity = useMemo(() => {
     const flag = publicSettings?.ui?.showProductQuantity;
@@ -32,6 +33,8 @@ function ProductDetail() {
       const response = await getProductById(id);
       const productData = response.data;
       setProduct(productData);
+      const opts = Array.isArray(productData?.pricingOptions) ? productData.pricingOptions : [];
+      setSelectedPricingOptionId(opts.length > 0 ? String(opts[0]._id) : '');
       if (productData && productData.images && productData.images.length > 0) {
         setSelectedImage(0);
       }
@@ -44,8 +47,17 @@ function ProductDetail() {
   };
 
   const handleAddToCart = () => {
+    const opts = Array.isArray(product?.pricingOptions) ? product.pricingOptions : [];
+    const selectedOpt = selectedPricingOptionId
+      ? opts.find((o) => String(o?._id) === String(selectedPricingOptionId))
+      : null;
+
     for (let i = 0; i < quantity; i++) {
-      addToCart(product);
+      addToCart(product, selectedOpt ? {
+        pricingOptionId: String(selectedOpt._id),
+        pricingOptionLabel: String(selectedOpt.label || '').trim(),
+        pricingOptionPrice: Number(selectedOpt.price),
+      } : undefined);
     }
     // Show notification
     const notification = document.createElement('div');
@@ -75,9 +87,14 @@ function ProductDetail() {
     );
   }
 
+  const productPricingOptions = Array.isArray(product?.pricingOptions) ? product.pricingOptions : [];
+  const selectedPricingOption = selectedPricingOptionId
+    ? productPricingOptions.find((o) => String(o?._id) === String(selectedPricingOptionId))
+    : null;
+  const basePrice = selectedPricingOption ? Number(selectedPricingOption.price) : Number(product.price);
   const discountedPrice = product.discount > 0
-    ? product.price - (product.price * product.discount / 100)
-    : product.price;
+    ? basePrice - (basePrice * product.discount / 100)
+    : basePrice;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -128,15 +145,17 @@ function ProductDetail() {
             {product.discount > 0 ? (
               <div className="flex items-center space-x-3">
                 <span className="text-3xl font-bold text-orange-600">₹{discountedPrice.toFixed(0)}</span>
-                <span className="text-xl text-gray-500 line-through">₹{product.price}</span>
+                <span className="text-xl text-gray-500 line-through">₹{basePrice}</span>
                 <span className="bg-red-500 text-white px-2 py-1 rounded text-sm font-bold">
                   {product.discount}% OFF
                 </span>
               </div>
             ) : (
-              <span className="text-3xl font-bold text-orange-600">₹{product.price}</span>
+              <span className="text-3xl font-bold text-orange-600">₹{basePrice}</span>
             )}
-            <p className="text-gray-600 mt-2">Weight: {product.weight}</p>
+            <p className="text-gray-600 mt-2">
+              {selectedPricingOption?.label ? <>Buying option: <span className="font-semibold">{selectedPricingOption.label}</span></> : <>Weight: {product.weight}</>}
+            </p>
           </div>
 
           <div className="mb-6">
@@ -155,6 +174,22 @@ function ProductDetail() {
           )}
 
           <div className="mb-6">
+            {productPricingOptions.length > 0 && (
+              <div className="flex items-center gap-4 mb-4">
+                <label className="font-semibold">Buying option:</label>
+                <select
+                  value={selectedPricingOptionId}
+                  onChange={(e) => setSelectedPricingOptionId(e.target.value)}
+                  className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                >
+                  {productPricingOptions.map((o) => (
+                    <option key={o._id} value={String(o._id)}>
+                      {o.label} — ₹{Number(o.price).toFixed(0)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="flex items-center space-x-4 mb-4">
               <label className="font-semibold">Quantity:</label>
               <div className="flex items-center space-x-2">

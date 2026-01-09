@@ -30,6 +30,28 @@ const normalizeProductBody = (body = {}) => {
     const price = Number(normalized.price);
     if (Number.isFinite(price)) normalized.price = price;
   }
+
+  if ('pricingOptions' in normalized) {
+    const optionsIn = Array.isArray(normalized.pricingOptions) ? normalized.pricingOptions : [];
+    const cleaned = [];
+    const seen = new Set();
+    for (const o of optionsIn) {
+      const rawId = o?._id ? String(o._id).trim() : '';
+      const label = String(o?.label || '').trim();
+      const price = Number(o?.price);
+      if (!label) continue;
+      if (!Number.isFinite(price) || price < 0) continue;
+      const key = label.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      cleaned.push({
+        ...(rawId && mongoose.Types.ObjectId.isValid(rawId) ? { _id: rawId } : {}),
+        label,
+        price,
+      });
+    }
+    normalized.pricingOptions = cleaned;
+  }
   if ('stock' in normalized) {
     const stock = Number(normalized.stock);
     if (Number.isFinite(stock)) normalized.stock = stock;

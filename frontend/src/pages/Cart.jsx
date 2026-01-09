@@ -199,7 +199,7 @@ function Cart() {
     const loadSuggestions = async () => {
       setSuggestionsLoading(true);
       try {
-        const paidIds = Array.from(new Set(paidCartItems.map((i) => i._id).filter(Boolean)));
+        const paidIds = Array.from(new Set(paidCartItems.map((i) => i?.productId || i?._id).filter(Boolean).map(String)));
         const cartProductIdSet = new Set([
           ...paidIds.map((x) => String(x)),
           ...giftCartItems.map((i) => String(i?.product || '')).filter(Boolean),
@@ -448,7 +448,7 @@ function Cart() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {giftBucketProducts
                     .filter((p) => {
-                      const inCartPaid = paidCartItems.some((i) => String(i._id) === String(p._id));
+                      const inCartPaid = paidCartItems.some((i) => String(i?.productId || i?._id) === String(p._id));
                       const inCartGift = giftCartItems.some((i) => String(i.product) === String(p._id));
                       return !inCartPaid && !inCartGift;
                     })
@@ -508,6 +508,11 @@ function Cart() {
                 <div className="flex-grow">
                   <h3 className="text-xl font-semibold mb-2">{item.name}</h3>
                   <p className="text-gray-600 text-sm mb-3">{item.category}</p>
+                  {!item?.isGift && item?.pricingOptionLabel ? (
+                    <p className="text-xs text-gray-700 mb-2">
+                      Option: <span className="font-semibold">{item.pricingOptionLabel}</span>
+                    </p>
+                  ) : null}
                   {item?.isGift && (
                     <p className="text-xs font-semibold text-green-700 mb-2">FREE ADD-ON</p>
                   )}

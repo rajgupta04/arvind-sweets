@@ -1,9 +1,19 @@
 import mongoose from "mongoose";
 
+const pricingOptionSchema = new mongoose.Schema(
+  {
+    label: { type: String, required: true },
+    price: { type: Number, required: true },
+  },
+  { _id: true }
+);
+
 const productSchema = new mongoose.Schema({
   name: { type: String, required: true },
   description: String,
   price: { type: Number, required: true },
+  // Optional alternative buying options (e.g., "1 kg", "1 pc")
+  pricingOptions: { type: [pricingOptionSchema], default: [] },
   category: String,
   // Only applicable for Fastfood category
   foodType: { type: String, enum: ['veg', 'nonveg'], required: false },

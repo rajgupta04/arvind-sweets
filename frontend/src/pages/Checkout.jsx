@@ -372,12 +372,14 @@ function Checkout() {
       setLoading(true);
 
       const orderItems = cartItems.map(item => ({
-        product: item?.isGift ? item?.product : item._id,
+        product: item?.isGift ? item?.product : (item?.productId || item._id),
         name: item.name,
         price: computeItemPrice(item),
         quantity: item.quantity,
         image: Array.isArray(item.images) ? item.images[0] : item.images,
-        isGift: Boolean(item?.isGift)
+        isGift: Boolean(item?.isGift),
+        pricingOptionId: item?.pricingOptionId ? String(item.pricingOptionId) : '',
+        pricingOptionLabel: item?.pricingOptionLabel ? String(item.pricingOptionLabel) : ''
       }));
 
       const orderPayload = {

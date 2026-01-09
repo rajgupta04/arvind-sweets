@@ -12,6 +12,7 @@ function ProductForm({ initialData = null, onSubmit, onCancel, isLoading = false
     category: 'Bengali Sweets',
     foodType: '',
     price: '',
+    pricingOptions: [],
     discount: 0,
     weight: '250g',
     stock: '',
@@ -46,6 +47,7 @@ function ProductForm({ initialData = null, onSubmit, onCancel, isLoading = false
         category: initialData.category || 'Bengali Sweets',
         foodType: initialData.foodType || '',
         price: initialData.price || '',
+        pricingOptions: Array.isArray(initialData.pricingOptions) ? initialData.pricingOptions : [],
         discount: initialData.discount || 0,
         weight: initialData.weight || '250g',
         stock: initialData.stock || '',
@@ -139,6 +141,15 @@ function ProductForm({ initialData = null, onSubmit, onCancel, isLoading = false
     const submitData = {
       ...formData,
       price: Number(formData.price),
+      pricingOptions: Array.isArray(formData.pricingOptions)
+        ? formData.pricingOptions
+            .map((o) => ({
+              ...(o?._id ? { _id: o._id } : {}),
+              label: String(o?.label || '').trim(),
+              price: Number(o?.price),
+            }))
+            .filter((o) => o.label && Number.isFinite(o.price) && o.price >= 0)
+        : [],
       stock: Number(formData.stock),
       discount: Number(formData.discount),
       featuredRank:
@@ -262,6 +273,90 @@ function ProductForm({ initialData = null, onSubmit, onCancel, isLoading = false
             placeholder="250g"
           />
         </div>
+      </div>
+
+      {/* Buying Options */}
+      <div className="border rounded-lg p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Buying Options (optional)</h3>
+            <p className="text-xs text-gray-600">Example: “1 kg” ₹500, “1 pc” ₹20</p>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              setFormData((prev) => ({
+                ...prev,
+                pricingOptions: [
+                  ...(Array.isArray(prev.pricingOptions) ? prev.pricingOptions : []),
+                  { label: '', price: '' },
+                ],
+              }))
+            }
+            className="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-black"
+          >
+            Add option
+          </button>
+        </div>
+
+        {Array.isArray(formData.pricingOptions) && formData.pricingOptions.length > 0 ? (
+          <div className="mt-4 space-y-3">
+            {formData.pricingOptions.map((opt, idx) => (
+              <div key={opt?._id || idx} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                <div className="md:col-span-7">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Label</label>
+                  <input
+                    value={opt?.label ?? ''}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setFormData((prev) => ({
+                        ...prev,
+                        pricingOptions: prev.pricingOptions.map((o, i) => (i === idx ? { ...o, label: v } : o)),
+                      }));
+                    }}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                    placeholder="e.g. 1 kg"
+                  />
+                </div>
+                <div className="md:col-span-4">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Price (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={opt?.price ?? ''}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setFormData((prev) => ({
+                        ...prev,
+                        pricingOptions: prev.pricingOptions.map((o, i) => (i === idx ? { ...o, price: v } : o)),
+                      }));
+                    }}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        pricingOptions: prev.pricingOptions.filter((_, i) => i !== idx),
+                      }))
+                    }
+                    className="w-full bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600"
+                    title="Remove option"
+                  >
+                    <FiX className="w-4 h-4 mx-auto" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-xs text-gray-500">No options added. Customers will buy using the main price.</p>
+        )}
       </div>
 
       {/* Stock */}

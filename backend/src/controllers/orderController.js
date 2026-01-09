@@ -143,7 +143,7 @@ export const createOrder = async (req, res) => {
 
     // Compute prices server-side (do not trust client totals)
     const ids = Array.isArray(orderItems) ? orderItems.map((i) => i?.product).filter(Boolean) : [];
-    const products = await Product.find({ _id: { $in: ids } }).select('name price discount images');
+    const products = await Product.find({ _id: { $in: ids } }).select('name price discount images pricingOptions');
     const byId = new Map(products.map((p) => [String(p._id), p]));
 
     const goals = settingsForRange?.cartGoals || {};
@@ -211,16 +211,45 @@ export const createOrder = async (req, res) => {
         };
       }
 
-      const basePrice = Number(prod.price) || 0;
+      let basePrice = Number(prod.price) || 0;
+      let resolvedOptionLabel = '';
+      const pricingOptionId = i?.pricingOptionId ? String(i.pricingOptionId).trim() : '';
+      const pricingOptionLabelRaw = i?.pricingOptionLabel ? String(i.pricingOptionLabel).trim() : '';
+      if (pricingOptionId || pricingOptionLabelRaw) {
+        const options = Array.isArray(prod.pricingOptions) ? prod.pricingOptions : [];
+        const opt = pricingOptionId
+          ? options.find((x) => String(x?._id) === pricingOptionId)
+          : options.find((x) => String(x?.label || '').trim().toLowerCase() === pricingOptionLabelRaw.toLowerCase());
+
+        if (!opt) {
+          const err = new Error('Invalid buying option selected');
+          err.statusCode = 400;
+          throw err;
+        }
+
+        const optPrice = Number(opt.price);
+        if (!Number.isFinite(optPrice) || optPrice < 0) {
+          const err = new Error('Invalid buying option price');
+          err.statusCode = 400;
+          throw err;
+        }
+
+        basePrice = optPrice;
+        resolvedOptionLabel = String(opt.label || '').trim();
+      }
       const disc = Number(prod.discount) || 0;
       const unit = disc > 0 ? basePrice - (basePrice * disc) / 100 : basePrice;
       const unitPrice = Math.round(unit * 100) / 100;
       computedPaidItemsPrice += unitPrice * qty;
       computedItemsPrice += unitPrice * qty;
 
+      const optionLabelRaw = pricingOptionLabelRaw;
+      const optionLabel = optionLabelRaw || resolvedOptionLabel;
+      const displayName = optionLabel ? `${prod.name} (${optionLabel})` : (i?.name || prod.name);
+
       return {
         product: prod._id,
-        name: i?.name || prod.name,
+        name: displayName,
         price: unitPrice,
         quantity: qty,
         image: i?.image,
