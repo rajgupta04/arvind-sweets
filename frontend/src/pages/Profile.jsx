@@ -388,6 +388,15 @@ function Profile() {
               ) : (
                 <div className="mt-3 text-xs text-gray-500">No pending rewards right now.</div>
               )}
+
+              <div className="mt-4">
+                <Link
+                  to="/sweetcoin"
+                  className="inline-flex items-center text-sm font-semibold text-orange-600 hover:text-orange-700"
+                >
+                  View 🪙 history
+                </Link>
+              </div>
             </div>
           </div>
         </div>

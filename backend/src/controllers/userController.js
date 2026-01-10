@@ -1,5 +1,6 @@
 // User controller - business logic for user routes
 import User from '../models/User.js';
+import SweetCoinTransaction from '../models/SweetCoinTransaction.js';
 import { generateToken } from '../utils/generateToken.js';
 import mongoose from 'mongoose';
 
@@ -158,10 +159,21 @@ export const getUserById = async (req, res) => {
 // @access  Private/Admin
 export const createUserByAdmin = async (req, res) => {
   try {
-    const { name, email, password, phone, role } = req.body || {};
+    const { name, email, password, phone, role, sweetCoinBalance } = req.body || {};
 
     if (!name || !email) {
       return res.status(400).json({ message: 'name and email are required' });
+    }
+
+    let parsedSweetCoinBalance;
+    if (sweetCoinBalance !== undefined) {
+      parsedSweetCoinBalance = Number(sweetCoinBalance);
+      if (!Number.isFinite(parsedSweetCoinBalance) || !Number.isInteger(parsedSweetCoinBalance)) {
+        return res.status(400).json({ message: 'sweetCoinBalance must be an integer' });
+      }
+      if (parsedSweetCoinBalance < 0) {
+        return res.status(400).json({ message: 'sweetCoinBalance must be >= 0' });
+      }
     }
 
     const existing = await User.findOne({ email: String(email).toLowerCase().trim() });
@@ -175,7 +187,22 @@ export const createUserByAdmin = async (req, res) => {
       password: password ? String(password) : undefined,
       phone: phone ? String(phone).trim() : undefined,
       role: role || undefined,
+      ...(parsedSweetCoinBalance !== undefined ? { sweetCoinBalance: parsedSweetCoinBalance } : {}),
     });
+
+    if (parsedSweetCoinBalance !== undefined && parsedSweetCoinBalance > 0) {
+      try {
+        await SweetCoinTransaction.create({
+          user: user._id,
+          amount: parsedSweetCoinBalance,
+          kind: 'admin_gift',
+          note: 'Gifted by admin',
+          createdBy: req.user?._id || null,
+        });
+      } catch (e) {
+        console.warn('Failed to create SweetCoinTransaction for admin createUser', e);
+      }
+    }
 
     const safe = await User.findById(user._id).select('-password');
     res.status(201).json(safe);
@@ -192,7 +219,22 @@ export const updateUserByAdmin = async (req, res) => {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    const { name, email, phone, role, password } = req.body || {};
+    const { name, email, phone, role, password, sweetCoinBalance } = req.body || {};
+
+    const previousSweetCoinBalance = Math.max(0, Math.floor(Number(user.sweetCoinBalance) || 0));
+    let sweetCoinDelta = 0;
+
+    if (sweetCoinBalance !== undefined) {
+      const parsed = Number(sweetCoinBalance);
+      if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+        return res.status(400).json({ message: 'sweetCoinBalance must be an integer' });
+      }
+      if (parsed < 0) {
+        return res.status(400).json({ message: 'sweetCoinBalance must be >= 0' });
+      }
+      user.sweetCoinBalance = parsed;
+      sweetCoinDelta = Math.trunc(parsed) - previousSweetCoinBalance;
+    }
 
     if (email && String(email).toLowerCase().trim() !== String(user.email).toLowerCase()) {
       const existing = await User.findOne({ email: String(email).toLowerCase().trim() });
@@ -211,6 +253,21 @@ export const updateUserByAdmin = async (req, res) => {
     }
 
     const updated = await user.save();
+
+    if (sweetCoinBalance !== undefined && sweetCoinDelta !== 0) {
+      try {
+        await SweetCoinTransaction.create({
+          user: updated._id,
+          amount: sweetCoinDelta,
+          kind: sweetCoinDelta > 0 ? 'admin_gift' : 'admin_adjustment',
+          note: sweetCoinDelta > 0 ? 'Gifted by admin' : 'Adjusted by admin',
+          createdBy: req.user?._id || null,
+        });
+      } catch (e) {
+        console.warn('Failed to create SweetCoinTransaction for admin updateUser', e);
+      }
+    }
+
     const safe = await User.findById(updated._id).select('-password');
     res.json(safe);
   } catch (error) {

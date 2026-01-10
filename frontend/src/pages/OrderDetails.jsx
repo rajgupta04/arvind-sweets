@@ -653,6 +653,31 @@ export default function OrderDetails() {
           <span>{formatCurrency(order.deliveryCharge)}</span>
         </div>
 
+        {(() => {
+          const couponCode = String(order?.coupon?.code || order?.couponCode || '').trim();
+          const discountAmount = Number(order?.coupon?.discountAmount ?? order?.discountAmount ?? 0) || 0;
+          if (!couponCode && discountAmount <= 0) return null;
+          return (
+            <div className="flex justify-between text-sm text-gray-600">
+              <span>Coupon</span>
+              <span>
+                {couponCode || 'Applied'}{discountAmount > 0 ? ` (−${formatCurrency(discountAmount)})` : ''}
+              </span>
+            </div>
+          );
+        })()}
+
+        {(() => {
+          const used = Math.max(0, Math.floor(Number(order?.sweetCoinUsed) || 0));
+          if (used <= 0) return null;
+          return (
+            <div className="flex justify-between text-sm text-gray-600">
+              <span>SweetCoin Used 🪙</span>
+              <span>−🪙 {used} (−{formatCurrency(used)})</span>
+            </div>
+          );
+        })()}
+
         <div className="flex justify-between text-lg font-bold border-t pt-3">
           <span>Total Paid</span>
           <span className="text-orange-600">

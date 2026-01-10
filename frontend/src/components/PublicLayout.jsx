@@ -6,6 +6,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { Toaster } from './ui/toaster';
 import MobilePillNav from './MobilePillNav';
 import CouponLoginPopup from './CouponLoginPopup';
+import OrderNotificationsListener from './OrderNotificationsListener';
 
 function PublicLayout() {
   const { pathname } = useLocation();
@@ -20,6 +21,7 @@ function PublicLayout() {
       {isHome ? <Footer /> : <div className="hidden md:block"><Footer /></div>}
       <MobilePillNav />
       <Toaster />
+      <OrderNotificationsListener />
       <CouponLoginPopup />
     </div>
   );

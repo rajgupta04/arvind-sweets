@@ -17,6 +17,10 @@ export const getOrderDetails = (id) => {
   return API.get(`/orders/${id}`);
 };
 
+export const getSweetCoinHistory = () => {
+  return API.get('/orders/sweetcoin/history');
+};
+
 export const getAllOrders = () => {
   return API.get('/orders');
 };

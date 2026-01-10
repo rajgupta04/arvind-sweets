@@ -36,6 +36,7 @@
 
     /* Keep only the border ring */
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
 
@@ -112,6 +113,66 @@
       animation: none;
     }
   }
+
+  .coin-glow {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 9999px;
+    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.8) 35%, rgba(255, 255, 255, 0.6) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+  }
+
+  .coin-glow::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: inherit;
+    background: conic-gradient(
+      from 180deg,
+      rgba(245, 158, 11, 0.0),
+      rgba(245, 158, 11, 0.85),
+      rgba(245, 158, 11, 0.0),
+      rgba(245, 158, 11, 0.9),
+      rgba(245, 158, 11, 0.0)
+    );
+    filter: blur(0.3px);
+    opacity: 0.85;
+    animation: coin-glow-rotate 1.9s linear infinite;
+
+    /* keep only ring */
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    padding: 2px;
+  }
+
+  .coin-glow::after {
+    content: '';
+    position: absolute;
+    inset: -10px;
+    border-radius: inherit;
+    background: radial-gradient(circle, rgba(245, 158, 11, 0.22) 0%, rgba(245, 158, 11, 0) 60%);
+    opacity: 0.8;
+    animation: coin-glow-pulse 1.4s ease-in-out infinite;
+  }
+
+  .coin-glow > span {
+    position: relative;
+    z-index: 1;
+    filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.35));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .coin-glow::before,
+    .coin-glow::after {
+      animation: none;
+    }
+  }
 }
 
 @keyframes pill-fire-rotate {
@@ -173,6 +234,27 @@
   100% {
     opacity: 0;
     transform: translate(-50%, -50%) scale(0.98);
+  }
+}
+
+@keyframes coin-glow-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes coin-glow-pulse {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.55;
+  }
+  55% {
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0.6;
   }
 }
 

@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useContext } from 'react';
 import { CartContext } from '../context/CartContext';
 import { PublicSettingsContext } from '../context/PublicSettingsContext';
+import { AuthContext } from '../context/AuthContext';
 import { FiTrash2, FiPlus, FiMinus } from 'react-icons/fi';
 import { getProductCardThumbUrl } from '../lib/cloudinary.js';
 import { getProductById } from '../services/productService';
@@ -15,7 +16,10 @@ const DEFAULT_FREE_GIFT_THRESHOLD = 500;
 function Cart() {
   const { cartItems, updateQuantity, removeFromCart, getCartTotal, clearCart, addToCart, addGiftToCart } = useContext(CartContext);
   const { publicSettings } = useContext(PublicSettingsContext);
+  const { user } = useContext(AuthContext);
   const navigate = useNavigate();
+
+  const [showCheckoutGate, setShowCheckoutGate] = useState(false);
 
   const [showConfetti, setShowConfetti] = useState(false);
   const wasFreeDeliveryUnlockedRef = useRef(false);
@@ -212,6 +216,14 @@ function Cart() {
 
   const giftsInCartCount = giftCartItems.length;
   const canChooseGift = isGiftUnlocked && giftsInCartCount < freeGiftMaxItems;
+
+  const handleProceedToCheckout = () => {
+    if (user) {
+      navigate('/checkout');
+      return;
+    }
+    setShowCheckoutGate(true);
+  };
 
   const suggestionGroupsConfig = useMemo(() => {
     return [
@@ -754,7 +766,7 @@ function Cart() {
             </div>
 
             <button
-              onClick={() => navigate('/checkout')}
+              onClick={handleProceedToCheckout}
               className="w-full bg-orange-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-orange-700 transition"
             >
               Proceed to Checkout
@@ -769,6 +781,65 @@ function Cart() {
           </div>
         </div>
       </div>
+
+      {showCheckoutGate ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+            <div className="flex items-start justify-between border-b px-5 py-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Continue to checkout</h3>
+                <p className="mt-1 text-sm text-gray-600">
+                  Looks like you’re not logged in. If you have an account, login to use your saved address and 🪙 SweetCoin.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCheckoutGate(false)}
+                className="ml-4 rounded-md px-2 py-1 text-gray-500 hover:bg-gray-100"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-3">
+              <button
+                type="button"
+                onClick={() => navigate('/login?redirect=/checkout')}
+                className="w-full rounded-lg bg-orange-600 px-4 py-3 font-semibold text-white hover:bg-orange-700 transition"
+              >
+                Already our family? Login
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCheckoutGate(false);
+                  navigate('/checkout');
+                }}
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 font-semibold text-gray-900 hover:bg-gray-50 transition"
+              >
+                Continue as guest
+              </button>
+
+              <div className="text-center text-sm text-gray-600">
+                New here?{' '}
+                <button
+                  type="button"
+                  onClick={() => navigate('/register?redirect=/checkout')}
+                  className="font-semibold text-orange-600 hover:text-orange-700"
+                >
+                  Create an account
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

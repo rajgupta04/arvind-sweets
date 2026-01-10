@@ -84,24 +84,26 @@ export const listUsers = async () => {
   return response.data;
 };
 
-export const createUser = async ({ name, email, phone, role, password } = {}) => {
+export const createUser = async ({ name, email, phone, role, password, sweetCoinBalance } = {}) => {
   const response = await API.post('/users', {
     name,
     email,
     phone,
     role,
     password,
+    ...(sweetCoinBalance !== undefined ? { sweetCoinBalance } : {}),
   });
   return response.data;
 };
 
-export const updateUser = async (id, { name, email, phone, role, password } = {}) => {
+export const updateUser = async (id, { name, email, phone, role, password, sweetCoinBalance } = {}) => {
   const response = await API.put(`/users/${id}`, {
     name,
     email,
     phone,
     role,
     password,
+    ...(sweetCoinBalance !== undefined ? { sweetCoinBalance } : {}),
   });
   return response.data;
 };

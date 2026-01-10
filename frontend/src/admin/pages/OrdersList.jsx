@@ -688,6 +688,32 @@ function OrdersList() {
                   <span>Delivery Charge</span>
                   <span>{formatCurrency(selectedOrder.deliveryCharge)}</span>
                 </div>
+
+                {(() => {
+                  const couponCode = String(selectedOrder?.coupon?.code || selectedOrder?.couponCode || '').trim();
+                  const discountAmount = Number(selectedOrder?.coupon?.discountAmount ?? selectedOrder?.discountAmount ?? 0) || 0;
+                  if (!couponCode && discountAmount <= 0) return null;
+                  return (
+                    <div className="flex justify-between">
+                      <span>Coupon</span>
+                      <span className="text-gray-700">
+                        {couponCode || 'Applied'}{discountAmount > 0 ? ` (−${formatCurrency(discountAmount)})` : ''}
+                      </span>
+                    </div>
+                  );
+                })()}
+
+                {(() => {
+                  const used = Math.max(0, Math.floor(Number(selectedOrder?.sweetCoinUsed) || 0));
+                  if (used <= 0) return null;
+                  return (
+                    <div className="flex justify-between">
+                      <span>SweetCoin Used 🪙</span>
+                      <span className="text-gray-700">−🪙 {used} (−{formatCurrency(used)})</span>
+                    </div>
+                  );
+                })()}
+
                 <div className="flex justify-between text-lg font-bold">
                   <span>Total</span>
                   <span className="text-orange-600">{formatCurrency(selectedOrder.totalPrice)}</span>

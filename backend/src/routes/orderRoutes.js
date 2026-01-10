@@ -5,6 +5,7 @@ import {
   getOrderById,
   getLatestOrder,
   getMyOrders,
+  getMySweetCoinHistory,
   getOrders,
   updateOrderToDelivered,
   updateOrderStatus,
@@ -25,6 +26,7 @@ const router = express.Router();
 router.post('/', protect, createOrder);
 router.post('/guest', createOrder);
 router.get('/myorders', protect, getMyOrders);
+router.get('/sweetcoin/history', protect, getMySweetCoinHistory);
 router.get('/delivery/my-packages', protect, authorizeRoles('delivery_boy'), getMyDeliveryOrders);
 router.get('/latest', protect, admin, getLatestOrder);
 router.get('/:id/tracking', protect, getOrderTracking);

@@ -25,6 +25,7 @@ export default function UsersList() {
     phone: '',
     role: 'customer',
     password: '',
+    sweetCoinBalance: '0',
   });
 
   const currentAdminId = useMemo(() => {
@@ -60,7 +61,7 @@ export default function UsersList() {
 
   const openCreate = () => {
     setEditingUser(null);
-    setForm({ name: '', email: '', phone: '', role: 'customer', password: '' });
+    setForm({ name: '', email: '', phone: '', role: 'customer', password: '', sweetCoinBalance: '0' });
     setModalOpen(true);
   };
 
@@ -72,6 +73,7 @@ export default function UsersList() {
       phone: u?.phone || '',
       role: u?.role || 'customer',
       password: '',
+      sweetCoinBalance: String(Number(u?.sweetCoinBalance) || 0),
     });
     setModalOpen(true);
   };
@@ -79,15 +81,24 @@ export default function UsersList() {
   const closeModal = () => {
     setModalOpen(false);
     setEditingUser(null);
-    setForm({ name: '', email: '', phone: '', role: 'customer', password: '' });
+    setForm({ name: '', email: '', phone: '', role: 'customer', password: '', sweetCoinBalance: '0' });
   };
 
   const handleSave = async () => {
     const name = String(form.name || '').trim();
     const email = String(form.email || '').trim();
 
+    const parsedSweetCoinBalance = Number(form.sweetCoinBalance);
+    const sweetCoinBalanceIsValid =
+      form.sweetCoinBalance !== '' && Number.isFinite(parsedSweetCoinBalance) && Number.isInteger(parsedSweetCoinBalance);
+
     if (!name || !email) {
       alert('Name and email are required');
+      return;
+    }
+
+    if (!sweetCoinBalanceIsValid || parsedSweetCoinBalance < 0) {
+      alert('SweetCoin balance must be a non-negative integer');
       return;
     }
 
@@ -101,6 +112,7 @@ export default function UsersList() {
           phone: form.phone,
           role: form.role,
           password: form.password,
+          sweetCoinBalance: parsedSweetCoinBalance,
         });
         showToast('User updated');
       } else {
@@ -110,6 +122,7 @@ export default function UsersList() {
           phone: form.phone,
           role: form.role,
           password: form.password,
+          sweetCoinBalance: parsedSweetCoinBalance,
         });
         showToast('User created');
       }
@@ -173,19 +186,20 @@ export default function UsersList() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">🪙 SweetCoin</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {loading ? (
                     <tr>
-                      <td colSpan="5" className="px-6 py-10 text-center text-gray-500">
+                      <td colSpan="6" className="px-6 py-10 text-center text-gray-500">
                         Loading users…
                       </td>
                     </tr>
                   ) : users.length === 0 ? (
                     <tr>
-                      <td colSpan="5" className="px-6 py-10 text-center text-gray-500">
+                      <td colSpan="6" className="px-6 py-10 text-center text-gray-500">
                         No users found.
                       </td>
                     </tr>
@@ -196,6 +210,7 @@ export default function UsersList() {
                         <td className="px-6 py-4 text-sm text-gray-700">{u.email}</td>
                         <td className="px-6 py-4 text-sm text-gray-700">{u.phone || '—'}</td>
                         <td className="px-6 py-4 text-sm text-gray-700">{u.role || 'customer'}</td>
+                        <td className="px-6 py-4 text-sm text-gray-700">{Number(u?.sweetCoinBalance) || 0}</td>
                         <td className="px-6 py-4 text-sm">
                           <div className="flex items-center gap-3">
                             <button
@@ -267,6 +282,20 @@ export default function UsersList() {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">🪙 SweetCoin Balance</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={form.sweetCoinBalance}
+                  onChange={(e) => setForm((p) => ({ ...p, sweetCoinBalance: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  placeholder="0"
+                />
+                <p className="text-xs text-gray-500 mt-1">Must be a non-negative integer.</p>
               </div>
 
               <div>

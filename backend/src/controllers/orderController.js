@@ -10,6 +10,7 @@ import { trackingStore } from '../utils/trackingStore.js';
 import User from '../models/User.js';
 import Product from '../models/Product.js';
 import Coupon from '../models/Coupon.js';
+import SweetCoinTransaction from '../models/SweetCoinTransaction.js';
 import {
   getAdminWhatsAppTo,
   getWhatsAppDefaultCountryCode,
@@ -705,6 +706,112 @@ export const getMyOrders = async (req, res) => {
       .populate('assignedDeliveryBoy')
       .sort({ createdAt: -1 });
     res.json(orders);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    SweetCoin balance + history for logged-in user
+// @route   GET /api/orders/sweetcoin/history
+// @access  Private
+export const getMySweetCoinHistory = async (req, res) => {
+  try {
+    const txns = await SweetCoinTransaction.find({ user: req.user._id })
+      .select('_id amount kind note createdAt')
+      .sort({ createdAt: -1 });
+
+    const orders = await Order.find({ user: req.user._id })
+      .select(
+        '_id createdAt updatedAt deliveredAt orderStatus totalPrice ' +
+        'sweetCoinEarned sweetCoinStatus sweetCoinCreditedAt ' +
+        'sweetCoinUsed sweetCoinUsedAt sweetCoinRefundedAt'
+      )
+      .sort({ createdAt: -1 });
+
+    const entries = [];
+
+    for (const t of txns) {
+      const delta = Math.trunc(Number(t?.amount) || 0);
+      if (!delta) continue;
+      entries.push({
+        id: `txn:${String(t._id)}`,
+        type: delta > 0 ? 'gift' : 'adjust',
+        delta,
+        amount: Math.abs(delta),
+        status: delta > 0 ? 'gift' : 'adjusted',
+        at: t?.createdAt,
+        note: t?.note || '',
+      });
+    }
+
+    for (const o of orders) {
+      const orderId = String(o._id);
+
+      const used = Math.max(0, Math.floor(Number(o?.sweetCoinUsed) || 0));
+      if (used > 0) {
+        entries.push({
+          id: `used:${orderId}`,
+          type: 'used',
+          delta: -used,
+          amount: used,
+          status: 'applied',
+          at: o?.sweetCoinUsedAt || o?.createdAt,
+          orderId,
+          orderStatus: o?.orderStatus,
+          totalPrice: o?.totalPrice,
+        });
+      }
+
+      if (used > 0 && o?.sweetCoinRefundedAt) {
+        entries.push({
+          id: `refund:${orderId}`,
+          type: 'refund',
+          delta: used,
+          amount: used,
+          status: 'refunded',
+          at: o?.sweetCoinRefundedAt,
+          orderId,
+          orderStatus: o?.orderStatus,
+          totalPrice: o?.totalPrice,
+        });
+      }
+
+      const earned = Math.max(0, Math.floor(Number(o?.sweetCoinEarned) || 0));
+      if (earned > 0) {
+        const credited =
+          String(o?.sweetCoinStatus || '') === 'credited' ||
+          Boolean(o?.sweetCoinCreditedAt) ||
+          String(o?.orderStatus || '') === 'Delivered';
+
+        entries.push({
+          id: `earned:${orderId}`,
+          type: 'earned',
+          delta: earned,
+          amount: earned,
+          status: credited ? 'credited' : 'pending',
+          at: credited ? (o?.sweetCoinCreditedAt || o?.deliveredAt || o?.updatedAt) : o?.createdAt,
+          orderId,
+          orderStatus: o?.orderStatus,
+          totalPrice: o?.totalPrice,
+        });
+      }
+    }
+
+    entries.sort((a, b) => {
+      const ta = a?.at ? new Date(a.at).getTime() : 0;
+      const tb = b?.at ? new Date(b.at).getTime() : 0;
+      return tb - ta;
+    });
+
+    const pendingTotal = entries
+      .filter((e) => e?.type === 'earned' && e?.status === 'pending')
+      .reduce((sum, e) => sum + (Number(e?.amount) || 0), 0);
+
+    res.json({
+      balance: Math.max(0, Math.floor(Number(req.user?.sweetCoinBalance) || 0)),
+      pendingTotal: Math.max(0, Math.floor(Number(pendingTotal) || 0)),
+      entries,
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

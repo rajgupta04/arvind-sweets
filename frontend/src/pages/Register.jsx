@@ -18,6 +18,13 @@ function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const redirectTo = (() => {
+    const params = new URLSearchParams(location.search || '');
+    const raw = params.get('redirect') || '';
+    // Only allow internal redirects
+    return raw.startsWith('/') ? raw : '/';
+  })();
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const oauthError = params.get('error');
@@ -61,7 +68,7 @@ function Register() {
         password: formData.password,
         phone: formData.phone
       });
-      navigate('/');
+      navigate(redirectTo || '/', { replace: true });
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed. Please try again.');
     } finally {

@@ -3,6 +3,7 @@ import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CartContext } from '../context/CartContext';
 import { AuthContext } from '../context/AuthContext';
+import { NotificationsContext } from '../context/NotificationsContext';
 import Loader from '../components/Loader';
 import { FiMapPin, FiPackage } from 'react-icons/fi';
 import { placeOrder, placeGuestOrder } from '../services/orderService';
@@ -86,6 +87,7 @@ function Checkout() {
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
   const { cartItems, clearCart } = useContext(CartContext);
+  const { addNotification } = useContext(NotificationsContext);
   const orderPlacedRef = useRef(false);
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('COD');
@@ -429,6 +431,28 @@ function Checkout() {
       const response = user ? await placeOrder(orderPayload) : await placeGuestOrder(orderPayload);
       orderPlacedRef.current = true;
       const { data: order } = response;
+
+      try {
+        const earned = Math.max(0, Math.floor(Number(order?.sweetCoinEarned) || 0));
+        const title = 'Order confirmed! ✅🎉';
+        const message = earned > 0
+          ? `We’re packing your sweets fresh. You’ll earn 🪙 ${earned} SweetCoin after delivery.`
+          : 'We’re packing your sweets fresh. Thanks for ordering!';
+
+        addNotification({
+          type: 'order_placed',
+          title,
+          message,
+          orderId: order?._id,
+          actions: [
+            ...(user ? [{ label: 'Track order', to: `/orders/${order?._id}` }] : []),
+            { label: 'Order now', to: '/products' },
+          ],
+          meta: earned > 0 ? { sweetCoinEarned: earned } : {},
+        });
+
+        toast({ title, description: message });
+      } catch {}
 
       await maybeAutoSaveAddress({ setDefault: savedAddresses.length === 0 });
 

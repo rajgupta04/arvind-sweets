@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { CartProvider } from './context/CartContext';
 import { AuthProvider } from './context/AuthContext';
 import { PublicSettingsProvider } from './context/PublicSettingsContext';
+import { NotificationsProvider } from './context/NotificationsContext';
 import PublicLayout from './components/PublicLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
@@ -23,6 +24,8 @@ import Orders from './pages/Orders';
 import OrderDetails from './pages/OrderDetails';
 import OrderSuccess from './pages/OrderSuccess';
 import OAuthSuccess from './pages/OAuthSuccess';
+import SweetCoin from './pages/SweetCoin';
+import Notifications from './pages/Notifications';
 import DeliveryTracker from './pages/DeliveryTracker';
 import DeliveryMyPackages from './pages/DeliveryMyPackages';
 import DeliveryOrderDetails from './pages/DeliveryOrderDetails';
@@ -47,53 +50,57 @@ function App() {
   return (
     <AuthProvider>
       <PublicSettingsProvider>
-        <CartProvider>
-          <Router
-            future={{
-              v7_startTransition: true,
-              v7_relativeSplatPath: true,
-            }}
-          >
-            <ScrollToTop />
-            <Routes>
-              {/* Admin Routes - No Navbar/Footer */}
-              <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-              <Route path="/admin/products" element={<AdminRoute><ProductsList /></AdminRoute>} />
-              <Route path="/admin/orders" element={<AdminRoute><OrdersList /></AdminRoute>} />
-              <Route path="/admin/users" element={<AdminRoute><UsersList /></AdminRoute>} />
-              <Route path="/admin/offers" element={<AdminRoute><OffersList /></AdminRoute>} />
-              <Route path="/admin/coupons" element={<AdminRoute><CouponsList /></AdminRoute>} />
-              <Route path="/admin/messages" element={<AdminRoute><AdminMessages /></AdminRoute>} />
-              <Route path="/admin/products/add" element={<AdminRoute><AddProduct /></AdminRoute>} />
-              <Route path="/admin/products/edit/:id" element={<AdminRoute><EditProduct /></AdminRoute>} />
-              <Route path="/admin/profile" element={<AdminRoute><AdminProfile /></AdminRoute>} />
-              <Route path="/admin/settings/delivery" element={<AdminRoute><DeliverySettings /></AdminRoute>} />
+        <NotificationsProvider>
+          <CartProvider>
+            <Router
+              future={{
+                v7_startTransition: true,
+                v7_relativeSplatPath: true,
+              }}
+            >
+              <ScrollToTop />
+              <Routes>
+                {/* Admin Routes - No Navbar/Footer */}
+                <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+                <Route path="/admin/products" element={<AdminRoute><ProductsList /></AdminRoute>} />
+                <Route path="/admin/orders" element={<AdminRoute><OrdersList /></AdminRoute>} />
+                <Route path="/admin/users" element={<AdminRoute><UsersList /></AdminRoute>} />
+                <Route path="/admin/offers" element={<AdminRoute><OffersList /></AdminRoute>} />
+                <Route path="/admin/coupons" element={<AdminRoute><CouponsList /></AdminRoute>} />
+                <Route path="/admin/messages" element={<AdminRoute><AdminMessages /></AdminRoute>} />
+                <Route path="/admin/products/add" element={<AdminRoute><AddProduct /></AdminRoute>} />
+                <Route path="/admin/products/edit/:id" element={<AdminRoute><EditProduct /></AdminRoute>} />
+                <Route path="/admin/profile" element={<AdminRoute><AdminProfile /></AdminRoute>} />
+                <Route path="/admin/settings/delivery" element={<AdminRoute><DeliverySettings /></AdminRoute>} />
 
-              {/* Delivery Boy Tracking - No Navbar/Footer */}
-              <Route path="/delivery/track" element={<DeliveryTracker />} />
-              <Route path="/delivery/my-packages" element={<DeliveryBoyRoute><DeliveryMyPackages /></DeliveryBoyRoute>} />
-              <Route path="/delivery/orders/:id" element={<DeliveryBoyRoute><DeliveryOrderDetails /></DeliveryBoyRoute>} />
+                {/* Delivery Boy Tracking - No Navbar/Footer */}
+                <Route path="/delivery/track" element={<DeliveryTracker />} />
+                <Route path="/delivery/my-packages" element={<DeliveryBoyRoute><DeliveryMyPackages /></DeliveryBoyRoute>} />
+                <Route path="/delivery/orders/:id" element={<DeliveryBoyRoute><DeliveryOrderDetails /></DeliveryBoyRoute>} />
 
-              {/* Public Routes - With Navbar/Footer */}
-              <Route element={<PublicLayout />}>
-                <Route path="/" element={<Home />} />
-                <Route path="/home" element={<Home />} />
-                <Route path="/products" element={<Products />} />
-                <Route path="/products/:id" element={<ProductDetail />} />
-                <Route path="/cart" element={<Cart />} />
-                <Route path="/checkout" element={<Checkout />} />
-                <Route path="/contact" element={<Contact />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                <Route path="/oauth/success" element={<OAuthSuccess />} />
-                <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-                <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
-                <Route path="/orders/:id" element={<ProtectedRoute><OrderDetails /></ProtectedRoute>} />
-                <Route path="/order-success/:id" element={<OrderSuccess />} />
-              </Route>
-            </Routes>
-          </Router>
-        </CartProvider>
+                {/* Public Routes - With Navbar/Footer */}
+                <Route element={<PublicLayout />}>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/home" element={<Home />} />
+                  <Route path="/products" element={<Products />} />
+                  <Route path="/products/:id" element={<ProductDetail />} />
+                  <Route path="/cart" element={<Cart />} />
+                  <Route path="/checkout" element={<Checkout />} />
+                  <Route path="/contact" element={<Contact />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/register" element={<Register />} />
+                  <Route path="/oauth/success" element={<OAuthSuccess />} />
+                  <Route path="/notifications" element={<Notifications />} />
+                  <Route path="/sweetcoin" element={<ProtectedRoute><SweetCoin /></ProtectedRoute>} />
+                  <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                  <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
+                  <Route path="/orders/:id" element={<ProtectedRoute><OrderDetails /></ProtectedRoute>} />
+                  <Route path="/order-success/:id" element={<OrderSuccess />} />
+                </Route>
+              </Routes>
+            </Router>
+          </CartProvider>
+        </NotificationsProvider>
       </PublicSettingsProvider>
     </AuthProvider>
   );
