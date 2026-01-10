@@ -1,5 +1,6 @@
 // Service Worker for Arvind Sweets PWA/TWA
-const CACHE_NAME = 'arvind-sweets-v1';
+// Bump this when changing caching behavior to force clients to refresh old caches.
+const CACHE_NAME = 'arvind-sweets-v2';
 const OFFLINE_URL = '/offline.html';
 
 // Assets to cache on install
@@ -39,7 +40,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch event - network first, fallback to cache
+// Fetch event
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -55,10 +56,33 @@ self.addEventListener('fetch', (event) => {
   // Skip Chrome extension and other schemes
   if (!url.protocol.startsWith('http')) return;
 
+  // For SPA navigations (HTML), prefer network and DO NOT cache per-route HTML.
+  // Caching HTML aggressively can cause clients to get a stale shell (e.g., missing viewport)
+  // and show a desktop-like layout until a refresh.
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .catch(async () => {
+          // Fall back to the cached app shell (ignoring query params) or offline page.
+          const cachedShell = await caches.match('/', { ignoreSearch: true });
+          if (cachedShell) return cachedShell;
+
+          const offlinePage = await caches.match(OFFLINE_URL);
+          if (offlinePage) return offlinePage;
+
+          return new Response('Offline', {
+            status: 503,
+            statusText: 'Service Unavailable',
+          });
+        })
+    );
+    return;
+  }
+
+  // For static assets: network first, fallback to cache, and cache successful responses.
   event.respondWith(
     fetch(request)
       .then((response) => {
-        // Clone and cache successful responses
         if (response.status === 200) {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -68,19 +92,9 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(async () => {
-        // Try cache
-        const cachedResponse = await caches.match(request);
-        if (cachedResponse) {
-          return cachedResponse;
-        }
+        const cachedResponse = await caches.match(request, { ignoreSearch: true });
+        if (cachedResponse) return cachedResponse;
 
-        // For navigation requests, show offline page
-        if (request.mode === 'navigate') {
-          const offlinePage = await caches.match(OFFLINE_URL);
-          if (offlinePage) return offlinePage;
-        }
-
-        // Return a basic offline response
         return new Response('Offline', {
           status: 503,
           statusText: 'Service Unavailable',

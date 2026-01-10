@@ -7,6 +7,15 @@ import './index.css';
 // Register Service Worker for PWA/TWA
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
+    let hasRefreshedForNewSw = false;
+
+    // When a new SW takes control, reload once to ensure fresh HTML/CSS/JS are in sync.
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hasRefreshedForNewSw) return;
+      hasRefreshedForNewSw = true;
+      window.location.reload();
+    });
+
     navigator.serviceWorker
       .register('/sw.js')
       .then((registration) => {
