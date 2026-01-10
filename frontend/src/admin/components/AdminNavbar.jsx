@@ -198,10 +198,12 @@ function AdminNavbar({ onMenuClick }) {
         <button
           type="button"
           onClick={handleBackToSite}
-          className="hidden sm:flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+          className="flex items-center gap-2 text-sm px-2 sm:px-3 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+          title="Back to Site"
         >
           <FiArrowLeft className="w-4 h-4" />
-          Back to Site
+          <span className="hidden sm:inline">Back to Site</span>
+          <span className="sm:hidden">Site</span>
         </button>
 
         <button
@@ -209,7 +211,7 @@ function AdminNavbar({ onMenuClick }) {
           onClick={handleEnablePush}
           disabled={pushBusy}
           className={
-            `hidden sm:flex items-center gap-2 text-sm px-3 py-2 rounded-lg ` +
+            `flex items-center gap-2 text-sm px-2 sm:px-3 py-2 rounded-lg ` +
             (pushBusy
               ? 'bg-gray-200 text-gray-600 cursor-not-allowed'
               : 'bg-orange-600 text-white hover:bg-orange-700')
@@ -217,11 +219,12 @@ function AdminNavbar({ onMenuClick }) {
           title="Enable push notifications for new orders"
         >
           <FiZap className="w-4 h-4" />
-          {pushBusy ? 'Enabling...' : 'Enable Push'}
+          <span className="sm:hidden">{pushBusy ? '...' : 'Push'}</span>
+          <span className="hidden sm:inline">{pushBusy ? 'Enabling...' : 'Enable Push'}</span>
         </button>
 
         {pushStatus ? (
-          <span className="hidden sm:inline text-xs text-gray-600 max-w-[180px] truncate" title={pushStatus}>
+          <span className="text-xs text-gray-600 max-w-[140px] sm:max-w-[180px] truncate" title={pushStatus}>
             {pushStatus}
           </span>
         ) : null}
