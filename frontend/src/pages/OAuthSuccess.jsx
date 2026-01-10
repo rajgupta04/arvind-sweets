@@ -9,6 +9,17 @@ function OAuthSuccess() {
   const { loading, user, token, logout } = useContext(AuthContext);
   const [error, setError] = useState('');
 
+  const isStandaloneApp = (() => {
+    try {
+      return (
+        window.matchMedia?.('(display-mode: standalone)')?.matches ||
+        window.navigator?.standalone === true
+      );
+    } catch {
+      return false;
+    }
+  })();
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const oauthError = params.get('error');
@@ -30,6 +41,11 @@ function OAuthSuccess() {
     if (loading) return;
 
     if (token && user) {
+      if (isStandaloneApp) {
+        window.location.replace('/');
+        return;
+      }
+
       navigate('/', { replace: true });
       return;
     }

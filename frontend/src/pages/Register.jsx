@@ -18,6 +18,18 @@ function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const isStandaloneApp = (() => {
+    try {
+      return (
+        window.matchMedia?.('(display-mode: standalone)')?.matches ||
+        // iOS Safari PWA
+        window.navigator?.standalone === true
+      );
+    } catch {
+      return false;
+    }
+  })();
+
   const redirectTo = (() => {
     const params = new URLSearchParams(location.search || '');
     const raw = params.get('redirect') || '';
@@ -68,6 +80,13 @@ function Register() {
         password: formData.password,
         phone: formData.phone
       });
+
+      // See Login.jsx: avoid the brief post-auth desktop-like viewport in installed app contexts.
+      if (isStandaloneApp) {
+        window.location.replace(redirectTo || '/');
+        return;
+      }
+
       navigate(redirectTo || '/', { replace: true });
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed. Please try again.');

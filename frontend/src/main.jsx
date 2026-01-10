@@ -4,6 +4,24 @@ import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
 
+// Ensure correct mobile viewport on every load (helps in some TWA/PWA auth return flows).
+(() => {
+  try {
+    const desired = 'width=device-width, initial-scale=1.0, viewport-fit=cover';
+    let meta = document.querySelector('meta[name="viewport"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute('name', 'viewport');
+      document.head.appendChild(meta);
+    }
+    if (meta.getAttribute('content') !== desired) {
+      meta.setAttribute('content', desired);
+    }
+  } catch {
+    // ignore
+  }
+})();
+
 // Register Service Worker for PWA/TWA
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

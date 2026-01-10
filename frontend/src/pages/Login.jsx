@@ -12,6 +12,18 @@ function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const isStandaloneApp = (() => {
+    try {
+      return (
+        window.matchMedia?.('(display-mode: standalone)')?.matches ||
+        // iOS Safari PWA
+        window.navigator?.standalone === true
+      );
+    } catch {
+      return false;
+    }
+  })();
+
   const redirectTo = (() => {
     const params = new URLSearchParams(location.search || '');
     const raw = params.get('redirect') || '';
@@ -46,6 +58,14 @@ function Login() {
 
     try {
       await loginUser(formData.email, formData.password);
+
+      // In installed app contexts (TWA/PWA), some devices briefly render with a desktop-like
+      // viewport after auth transitions; a hard navigation fixes it immediately.
+      if (isStandaloneApp) {
+        window.location.replace(redirectTo || '/');
+        return;
+      }
+
       navigate(redirectTo || '/', { replace: true });
     } catch (err) {
       setError(err.response?.data?.message || 'Invalid email or password');
