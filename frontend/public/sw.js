@@ -141,10 +141,12 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Focus existing window if available
+      // Focus any existing client and navigate it.
       for (const client of clientList) {
-        if (client.url.includes('arvindsweets.com') && 'focus' in client) {
-          client.navigate(urlToOpen);
+        if ('focus' in client) {
+          try {
+            client.navigate(urlToOpen);
+          } catch {}
           return client.focus();
         }
       }

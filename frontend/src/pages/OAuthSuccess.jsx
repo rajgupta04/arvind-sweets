@@ -41,12 +41,13 @@ function OAuthSuccess() {
     if (loading) return;
 
     if (token && user) {
+      const destination = user?.role === 'admin' ? '/admin' : '/';
       if (isStandaloneApp) {
-        window.location.replace('/');
+        window.location.replace(destination);
         return;
       }
 
-      navigate('/', { replace: true });
+      navigate(destination, { replace: true });
       return;
     }
 

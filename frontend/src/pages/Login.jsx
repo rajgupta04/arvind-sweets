@@ -57,16 +57,21 @@ function Login() {
     setError('');
 
     try {
-      await loginUser(formData.email, formData.password);
+      const userData = await loginUser(formData.email, formData.password);
+
+      const isAdmin = userData?.role === 'admin';
+      const destination = isAdmin
+        ? (redirectTo.startsWith('/admin') ? redirectTo : '/admin')
+        : (redirectTo || '/');
 
       // In installed app contexts (TWA/PWA), some devices briefly render with a desktop-like
       // viewport after auth transitions; a hard navigation fixes it immediately.
       if (isStandaloneApp) {
-        window.location.replace(redirectTo || '/');
+        window.location.replace(destination);
         return;
       }
 
-      navigate(redirectTo || '/', { replace: true });
+      navigate(destination, { replace: true });
     } catch (err) {
       setError(err.response?.data?.message || 'Invalid email or password');
     } finally {

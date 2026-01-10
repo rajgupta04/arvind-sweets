@@ -1,9 +1,10 @@
 // Admin Navbar Component
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiMenu, FiBell, FiUser } from 'react-icons/fi';
+import { FiMenu, FiBell, FiUser, FiArrowLeft, FiZap } from 'react-icons/fi';
 import { getLatestOrder } from '../services/adminApi';
 import { createSocket } from '../../services/socket';
+import { ensurePushSubscribed } from '../../services/push';
 
 const formatAmount = (value = 0) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value);
@@ -14,6 +15,8 @@ function AdminNavbar({ onMenuClick }) {
   const [recentOrders, setRecentOrders] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushStatus, setPushStatus] = useState('');
   const lastBroadcastedId = useRef(localStorage.getItem('admin:lastBroadcastedOrder') || '');
   const socketRef = useRef(null);
 
@@ -159,6 +162,26 @@ function AdminNavbar({ onMenuClick }) {
     });
   };
 
+  const handleEnablePush = async () => {
+    try {
+      setPushBusy(true);
+      setPushStatus('');
+      const result = await ensurePushSubscribed();
+      setPushStatus(result?.status || 'enabled');
+      setTimeout(() => setPushStatus(''), 4000);
+    } catch (e) {
+      const msg = e?.message || 'Failed to enable push';
+      setPushStatus(msg);
+      setTimeout(() => setPushStatus(''), 5000);
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const handleBackToSite = () => {
+    navigate('/', { replace: false });
+  };
+
   return (
     <nav className="fixed top-0 left-0 lg:left-64 right-0 h-16 bg-white shadow-md z-30 flex items-center justify-between px-4 sm:px-6">
       <div className="flex items-center space-x-4">
@@ -172,6 +195,37 @@ function AdminNavbar({ onMenuClick }) {
       </div>
       
       <div className="flex items-center space-x-4 relative">
+        <button
+          type="button"
+          onClick={handleBackToSite}
+          className="hidden sm:flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+        >
+          <FiArrowLeft className="w-4 h-4" />
+          Back to Site
+        </button>
+
+        <button
+          type="button"
+          onClick={handleEnablePush}
+          disabled={pushBusy}
+          className={
+            `hidden sm:flex items-center gap-2 text-sm px-3 py-2 rounded-lg ` +
+            (pushBusy
+              ? 'bg-gray-200 text-gray-600 cursor-not-allowed'
+              : 'bg-orange-600 text-white hover:bg-orange-700')
+          }
+          title="Enable push notifications for new orders"
+        >
+          <FiZap className="w-4 h-4" />
+          {pushBusy ? 'Enabling...' : 'Enable Push'}
+        </button>
+
+        {pushStatus ? (
+          <span className="hidden sm:inline text-xs text-gray-600 max-w-[180px] truncate" title={pushStatus}>
+            {pushStatus}
+          </span>
+        ) : null}
+
         <button
           onClick={handleBellClick}
           className="relative text-gray-600 hover:text-gray-900 admin-notification-panel"

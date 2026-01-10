@@ -17,6 +17,7 @@ import addressRoutes from './routes/addressRoutes.js';
 import couponRoutes from './routes/couponRoutes.js';
 import debugWhatsAppRoutes from './routes/debugWhatsAppRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
+import pushRoutes from './routes/pushRoutes.js';
 
 const app = express();
 
@@ -60,6 +61,7 @@ app.use('/api/addresses', addressRoutes);
 app.use('/api/coupons', couponRoutes);
 app.use('/api/debug/whatsapp', debugWhatsAppRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/push', pushRoutes);
 
 // Error handling middleware
 app.use(notFound);

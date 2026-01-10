@@ -8,6 +8,7 @@ import { sendOrderEmail } from '../utils/sendEmail.js';
 import Settings from '../models/Settings.js';
 import { trackingStore } from '../utils/trackingStore.js';
 import User from '../models/User.js';
+import { sendPushToAdminsOnNewOrder } from '../utils/pushService.js';
 import Product from '../models/Product.js';
 import Coupon from '../models/Coupon.js';
 import SweetCoinTransaction from '../models/SweetCoinTransaction.js';
@@ -614,6 +615,15 @@ export const createOrder = async (req, res) => {
       sendOrderEmail(populatedOrder);
     } catch (e) {
       console.warn('Order email failed:', e?.message || e);
+    }
+
+    // Web Push (FCM/VAPID-based) for admin devices (does not block order creation)
+    try {
+      sendPushToAdminsOnNewOrder({ order: populatedOrder }).catch((e) => {
+        console.warn('Admin push notification failed:', e?.message || e);
+      });
+    } catch (e) {
+      console.warn('Admin push notification crashed:', e?.message || e);
     }
 
     // WhatsApp Cloud API (Meta test number) notifications (optional)
