@@ -9,6 +9,35 @@ import { ensurePushSubscribed, getLocalPushStatus } from '../../services/push';
 const formatAmount = (value = 0) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value);
 
+async function showSystemNotification({ title, body, tag, url } = {}) {
+  try {
+    if (typeof window === 'undefined') return false;
+    if (!('Notification' in window)) return false;
+    if (Notification.permission !== 'granted') return false;
+
+    const options = {
+      body: String(body || ''),
+      tag: String(tag || ''),
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-96.png',
+      data: { url: url || '/admin/orders' },
+    };
+
+    // Prefer SW notifications because they behave consistently in TWA.
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification(String(title || 'Arvind Sweets'), options);
+      return true;
+    }
+
+    // Fallback (works in normal browser tabs)
+    new Notification(String(title || 'Arvind Sweets'), options);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function AdminNavbar({ onMenuClick }) {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -69,6 +98,15 @@ function AdminNavbar({ onMenuClick }) {
           setRecentOrders((prev) => [latest, ...prev.filter((o) => o._id !== latest._id)].slice(0, 5));
           setUnreadCount((prev) => prev + 1);
           window.dispatchEvent(new CustomEvent('admin:new-order', { detail: latest }));
+
+          // Also show a real OS notification when the admin panel is open.
+          // (Sockets alone won't show in the phone notification shade.)
+          showSystemNotification({
+            title: 'New Order Received',
+            body: `Order ${latest._id}${latest.totalPrice != null ? ` • ₹${Number(latest.totalPrice)}` : ''}`,
+            tag: `order:${latest._id}`,
+            url: '/admin/orders',
+          });
         } else if (initial) {
           setRecentOrders((prev) => (prev.length ? prev : [latest]));
         }
@@ -145,11 +183,26 @@ function AdminNavbar({ onMenuClick }) {
       };
 
       if (Notification.permission === 'granted') {
-        notify();
+        // Prefer SW notification for TWA consistency.
+        showSystemNotification({
+          title: 'Order Cancelled',
+          body: `Order ID: ${order?._id} • ${reason}`,
+          tag: `cancel:${order?._id}`,
+          url: '/admin/orders',
+        }).then((usedSw) => {
+          if (!usedSw) notify();
+        });
       } else if (Notification.permission === 'default') {
         Notification.requestPermission().then((permission) => {
           if (permission === 'granted') {
-            notify();
+            showSystemNotification({
+              title: 'Order Cancelled',
+              body: `Order ID: ${order?._id} • ${reason}`,
+              tag: `cancel:${order?._id}`,
+              url: '/admin/orders',
+            }).then((usedSw) => {
+              if (!usedSw) notify();
+            });
           }
         });
       }
