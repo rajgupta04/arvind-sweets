@@ -10,6 +10,16 @@ function isConfigured() {
   );
 }
 
+export function getPushDiagnostics() {
+  const subject = process.env.VAPID_SUBJECT || (process.env.VAPID_EMAIL ? `mailto:${process.env.VAPID_EMAIL}` : null);
+  return {
+    configured: isConfigured(),
+    hasPublicKey: Boolean(process.env.VAPID_PUBLIC_KEY),
+    hasPrivateKey: Boolean(process.env.VAPID_PRIVATE_KEY),
+    subject,
+  };
+}
+
 function ensureConfigured() {
   if (!isConfigured()) return false;
 
@@ -54,6 +64,25 @@ async function sendOne(subscriptionDoc, payload) {
     }
     return { ok: false, statusCode, message: err?.message || 'push_failed' };
   }
+}
+
+export async function sendPushToSubscriptions(subscriptions, payload) {
+  if (!ensureConfigured()) {
+    return { ok: false, reason: 'vapid_not_configured', delivered: 0, attempted: 0 };
+  }
+
+  const subs = Array.isArray(subscriptions) ? subscriptions : [];
+  if (!subs.length) return { ok: true, delivered: 0, attempted: 0 };
+
+  const results = await Promise.allSettled(subs.map((s) => sendOne(s, payload)));
+  const delivered = results.filter((r) => r.status === 'fulfilled' && r.value?.ok).length;
+  return { ok: true, delivered, attempted: subs.length };
+}
+
+export async function sendPushToUser({ userId, payload } = {}) {
+  const subs = await PushSubscription.find({ user: userId }).lean();
+  const result = await sendPushToSubscriptions(subs, payload);
+  return { ...result, userId: String(userId || '') };
 }
 
 export async function upsertPushSubscription({ userId, subscription, userAgent } = {}) {
@@ -119,4 +148,25 @@ export async function sendPushToAdminsOnNewOrder({ order } = {}) {
   const delivered = results.filter((r) => r.status === 'fulfilled' && r.value?.ok).length;
 
   return { ok: true, delivered, attempted: subs.length };
+}
+
+export async function sendTestPushToAdmins() {
+  const diagnostics = getPushDiagnostics();
+  if (!diagnostics.configured) {
+    return { ok: false, reason: 'vapid_not_configured', diagnostics };
+  }
+
+  const admins = await User.find({ role: 'admin' }).select('_id').lean();
+  const adminIds = admins.map((a) => a._id);
+  const subs = await PushSubscription.find({ user: { $in: adminIds } }).lean();
+
+  const payload = {
+    title: 'Test Push',
+    body: 'If you see this, push works even when the app is closed.',
+    url: '/admin/orders',
+    tag: 'test:push',
+  };
+
+  const result = await sendPushToSubscriptions(subs, payload);
+  return { ...result, admins: adminIds.length, subscriptions: subs.length };
 }

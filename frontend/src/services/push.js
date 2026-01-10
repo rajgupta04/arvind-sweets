@@ -89,3 +89,13 @@ export async function ensurePushSubscribed() {
 
   return { ok: true, status: 'subscribed', endpoint: subscription.endpoint };
 }
+
+export async function sendTestPushSelf() {
+  const res = await API.post('/push/test/self', {});
+  return res.data;
+}
+
+export async function sendTestPushAdmins() {
+  const res = await API.post('/push/test/admins', {});
+  return res.data;
+}

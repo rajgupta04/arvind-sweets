@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { FiMenu, FiBell, FiUser, FiArrowLeft, FiZap } from 'react-icons/fi';
 import { getLatestOrder } from '../services/adminApi';
 import { createSocket } from '../../services/socket';
-import { ensurePushSubscribed, getLocalPushStatus } from '../../services/push';
+import { ensurePushSubscribed, getLocalPushStatus, sendTestPushAdmins } from '../../services/push';
 
 const formatAmount = (value = 0) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value);
@@ -45,6 +45,7 @@ function AdminNavbar({ onMenuClick }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [panelOpen, setPanelOpen] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
+  const [pushTestBusy, setPushTestBusy] = useState(false);
   const [pushStatus, setPushStatus] = useState('');
   const lastBroadcastedId = useRef(localStorage.getItem('admin:lastBroadcastedOrder') || '');
   const socketRef = useRef(null);
@@ -262,6 +263,23 @@ function AdminNavbar({ onMenuClick }) {
     }
   };
 
+  const handleTestPush = async () => {
+    try {
+      setPushTestBusy(true);
+      const res = await sendTestPushAdmins();
+      const delivered = res?.result?.delivered;
+      const attempted = res?.result?.attempted;
+      setPushStatus(`Test sent: ${delivered}/${attempted}`);
+      setTimeout(() => setPushStatus(''), 6000);
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || 'Failed to send test push';
+      setPushStatus(msg);
+      setTimeout(() => setPushStatus(''), 6000);
+    } finally {
+      setPushTestBusy(false);
+    }
+  };
+
   const handleBackToSite = () => {
     // Bypass the admin auto-redirect when an admin explicitly wants the customer site.
     navigate('/?view=site', { replace: false });
@@ -306,6 +324,22 @@ function AdminNavbar({ onMenuClick }) {
           <FiZap className="w-4 h-4" />
           <span className="sm:hidden">{pushBusy ? '...' : 'Push'}</span>
           <span className="hidden sm:inline">{pushBusy ? 'Enabling...' : 'Enable Push'}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleTestPush}
+          disabled={pushTestBusy}
+          className={
+            `flex items-center gap-2 text-sm px-2 sm:px-3 py-2 rounded-lg border ` +
+            (pushTestBusy
+              ? 'border-gray-200 bg-gray-100 text-gray-600 cursor-not-allowed'
+              : 'border-orange-200 text-orange-700 hover:bg-orange-50')
+          }
+          title="Send a server-side test push to all admins"
+        >
+          <span className="sm:hidden">Test</span>
+          <span className="hidden sm:inline">Test Push</span>
         </button>
 
         {pushStatus ? (
