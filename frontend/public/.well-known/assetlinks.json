@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.arvindsweets.app",
+    "sha256_cert_fingerprints": [
+      "52:83:AB:F8:72:D8:9D:2D:6A:80:36:9A:D1:EA:C0:76:05:A0:7D:AE:04:69:8F:74:6C:A2:11:03:0C:7E:8F:AF"
+    ]
+  }
+}]

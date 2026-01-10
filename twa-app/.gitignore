@@ -1,0 +1,14 @@
+# Generated keystore (keep private)
+android.keystore
+
+# Bubblewrap / Android outputs (will be created after init)
+android/
+app/
+build/
+.gradle/
+**/.gradle/
+**/build/
+
+# Local tooling
+node_modules/
+*.log

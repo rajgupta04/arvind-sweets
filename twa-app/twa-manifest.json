@@ -1,0 +1,26 @@
+{
+  "host": "arvindsweets.com",
+  "name": "Arvind Sweets",
+  "launcherName": "Arvind Sweets",
+  "display": "standalone",
+  "themeColor": "#ea580c",
+  "navigationColor": "#ffffff",
+  "backgroundColor": "#ffffff",
+  "enableNotifications": true,
+  "startUrl": "/?source=twa",
+  "iconUrl": "https://arvindsweets.com/icons/icon-512.png",
+  "maskableIconUrl": "https://arvindsweets.com/icons/maskable-icon-512.png",
+  "signingKey": {
+    "path": "android.keystore",
+    "alias": "arvindsweets"
+  },
+  "appVersionCode": 1,
+  "appVersionName": "1.0.0",
+  "packageId": "com.arvindsweets.app",
+  "fallbackType": "customtabs",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [
+    "https://arvind-sweets.onrender.com"
+  ],
+  "webManifestUrl": "https://arvindsweets.com/manifest.json"
+}
