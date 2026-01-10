@@ -7,6 +7,7 @@ import { Toaster } from './ui/toaster';
 import MobilePillNav from './MobilePillNav';
 import CouponLoginPopup from './CouponLoginPopup';
 import OrderNotificationsListener from './OrderNotificationsListener';
+import InstallAppBanner from './InstallAppBanner';
 
 function PublicLayout() {
   const { pathname } = useLocation();
@@ -23,6 +24,7 @@ function PublicLayout() {
       <Toaster />
       <OrderNotificationsListener />
       <CouponLoginPopup />
+      <InstallAppBanner />
     </div>
   );
 }
