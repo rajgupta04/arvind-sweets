@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { FiMenu, FiBell, FiUser, FiArrowLeft, FiZap } from 'react-icons/fi';
 import { getLatestOrder } from '../services/adminApi';
 import { createSocket } from '../../services/socket';
-import { ensurePushSubscribed } from '../../services/push';
+import { ensurePushSubscribed, getLocalPushStatus } from '../../services/push';
 
 const formatAmount = (value = 0) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value);
@@ -87,6 +87,37 @@ function AdminNavbar({ onMenuClick }) {
 
     return () => clearInterval(intervalId);
   }, [navigate]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const status = await getLocalPushStatus();
+        if (cancelled) return;
+
+        if (!status?.supported) {
+          setPushStatus('Push unsupported on this device');
+          return;
+        }
+
+        if (status.permission === 'denied') {
+          setPushStatus('Notifications blocked');
+          return;
+        }
+
+        if (status.subscribed) {
+          setPushStatus('Push: ON');
+        } else {
+          setPushStatus('Push: OFF');
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!user || user.role !== 'admin') return;
@@ -179,7 +210,8 @@ function AdminNavbar({ onMenuClick }) {
   };
 
   const handleBackToSite = () => {
-    navigate('/', { replace: false });
+    // Bypass the admin auto-redirect when an admin explicitly wants the customer site.
+    navigate('/?view=site', { replace: false });
   };
 
   return (

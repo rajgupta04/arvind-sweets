@@ -16,6 +16,35 @@ export async function getVapidPublicKey() {
   return res.data?.publicKey;
 }
 
+export async function getLocalPushStatus() {
+  if (typeof window === 'undefined') {
+    return { supported: false, reason: 'no-window' };
+  }
+  if (!('serviceWorker' in navigator)) {
+    return { supported: false, reason: 'no-service-worker' };
+  }
+  if (!('PushManager' in window)) {
+    return { supported: false, reason: 'no-push-manager' };
+  }
+  if (!('Notification' in window)) {
+    return { supported: false, reason: 'no-notification-api' };
+  }
+
+  const permission = Notification.permission;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    return {
+      supported: true,
+      permission,
+      subscribed: Boolean(sub),
+      endpoint: sub?.endpoint,
+    };
+  } catch (e) {
+    return { supported: true, permission, subscribed: false, error: e?.message || 'status_failed' };
+  }
+}
+
 export async function ensurePushSubscribed() {
   if (typeof window === 'undefined') {
     throw new Error('Not supported');

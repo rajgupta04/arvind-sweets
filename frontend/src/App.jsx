@@ -1,6 +1,6 @@
 // Main App component
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { CartProvider } from './context/CartContext';
 import { AuthProvider } from './context/AuthContext';
 import { PublicSettingsProvider } from './context/PublicSettingsContext';
@@ -11,6 +11,33 @@ import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
 import DeliveryBoyRoute from './components/DeliveryBoyRoute';
 import ScrollToTop from './components/ScrollToTop';
+
+function AdminAutoRedirect() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    try {
+      const path = location.pathname;
+      if (path !== '/' && path !== '/home') return;
+
+      const params = new URLSearchParams(location.search || '');
+      if (params.get('view') === 'site') return;
+
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const user = JSON.parse(localStorage.getItem('user') || 'null');
+      if (user?.role === 'admin') {
+        navigate('/admin', { replace: true });
+      }
+    } catch {
+      // ignore
+    }
+  }, [location.pathname, location.search, navigate]);
+
+  return null;
+}
 
 // Pages
 import Home from './pages/Home';
@@ -61,6 +88,7 @@ function App() {
                 v7_relativeSplatPath: true,
               }}
             >
+              <AdminAutoRedirect />
               <ScrollToTop />
               <Routes>
                 {/* Admin Routes - No Navbar/Footer */}
