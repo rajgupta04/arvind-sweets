@@ -36,6 +36,7 @@ export const registerUser = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        sweetCoinBalance: Number(user.sweetCoinBalance) || 0,
         token: generateToken(user)
       });
     } else {
@@ -69,6 +70,7 @@ export const loginUser = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        sweetCoinBalance: Number(user.sweetCoinBalance) || 0,
         token: generateToken(user)
       });
     } else {
@@ -115,7 +117,8 @@ export const updateUserProfile = async (req, res) => {
         email: updatedUser.email,
         phone: updatedUser.phone,
         address: updatedUser.address,
-        role: updatedUser.role
+        role: updatedUser.role,
+        sweetCoinBalance: Number(updatedUser.sweetCoinBalance) || 0
       });
     } else {
       res.status(404).json({ message: 'User not found' });

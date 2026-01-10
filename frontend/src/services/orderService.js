@@ -5,6 +5,10 @@ export const placeOrder = (orderData) => {
   return API.post('/orders', orderData);
 };
 
+export const placeGuestOrder = (orderData) => {
+  return API.post('/orders/guest', orderData);
+};
+
 export const getMyOrders = () => {
   return API.get('/orders/myorders');
 };

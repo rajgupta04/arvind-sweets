@@ -9,6 +9,9 @@ const orderItemSchema = new mongoose.Schema({
   },
   name: String,
   price: Number,
+  isGift: { type: Boolean, default: false },
+  pricingOptionId: { type: mongoose.Schema.Types.ObjectId, required: false, default: null },
+  pricingOptionLabel: { type: String, default: '' },
   quantity: {
     type: Number,
     required: true,
@@ -21,7 +24,8 @@ const orderSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: false,
+    default: null
   },
   orderItems: [orderItemSchema],
   shippingAddress: {
@@ -66,6 +70,16 @@ const orderSchema = new mongoose.Schema({
     discountValue: { type: Number, default: 0 },
     discountAmount: { type: Number, default: 0 },
   },
+
+  // SweetCoin reward & redemption
+  sweetCoinPercent: { type: Number, default: 10 },
+  sweetCoinEarned: { type: Number, default: 0 },
+  sweetCoinStatus: { type: String, enum: ['none', 'pending', 'credited'], default: 'none' },
+  sweetCoinCreditedAt: { type: Date, default: null },
+
+  sweetCoinUsed: { type: Number, default: 0 },
+  sweetCoinUsedAt: { type: Date, default: null },
+  sweetCoinRefundedAt: { type: Date, default: null },
   totalPrice: {
     type: Number,
     required: true,

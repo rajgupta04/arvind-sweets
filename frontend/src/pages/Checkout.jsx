@@ -5,7 +5,7 @@ import { CartContext } from '../context/CartContext';
 import { AuthContext } from '../context/AuthContext';
 import Loader from '../components/Loader';
 import { FiMapPin, FiPackage } from 'react-icons/fi';
-import { placeOrder } from '../services/orderService';
+import { placeOrder, placeGuestOrder } from '../services/orderService';
 import { toast } from '../components/ui/use-toast';
 import { listMyAddresses, upsertMyAddress } from '../services/addressService';
 import LocationPickerMap from '../components/LocationPickerMap';
@@ -306,10 +306,21 @@ function Checkout() {
   }, [itemsPrice, deliveryType]);
 
   const discountAmount = appliedCoupon?.discountAmount ? Number(appliedCoupon.discountAmount) : 0;
-  const totalPrice = Math.max(0, itemsPrice + deliveryCharge - discountAmount);
+  const totalBeforeSweetCoin = Math.max(0, itemsPrice + deliveryCharge - discountAmount);
   const hasDiscount = mrpItemsPrice - itemsPrice > 0.009;
 
+  const sweetCoinBalance = Math.max(0, Math.floor(Number(user?.sweetCoinBalance) || 0));
+  const [sweetCoinToUse, setSweetCoinToUse] = useState(0);
+  const sweetCoinApplied = user
+    ? Math.max(0, Math.min(Math.floor(Number(sweetCoinToUse) || 0), sweetCoinBalance, Math.floor(totalBeforeSweetCoin)))
+    : 0;
+  const totalPrice = Math.max(0, totalBeforeSweetCoin - sweetCoinApplied);
+
   const handleApplyCoupon = async () => {
+    if (!user) {
+      setCouponError('Login required to use coupons');
+      return;
+    }
     const code = String(couponCode || '').trim();
     if (!code) {
       setCouponError('Please enter a coupon code');
@@ -409,12 +420,13 @@ function Checkout() {
         deliveryCharge,
         totalPrice,
         couponCode: appliedCoupon?.coupon?.code || appliedCoupon?.code || '',
+        sweetCoinUsed: user ? sweetCoinApplied : 0,
         paymentStatus: 'Pending',
         userLatitude: shippingAddress.location?.lat ?? null,
         userLongitude: shippingAddress.location?.lng ?? null
       };
 
-      const response = await placeOrder(orderPayload);
+      const response = user ? await placeOrder(orderPayload) : await placeGuestOrder(orderPayload);
       orderPlacedRef.current = true;
       const { data: order } = response;
 
@@ -669,43 +681,81 @@ function Checkout() {
               })}
             </div>
 
-            {/* Coupon */}
-            <div className="border-t pt-4">
-              <div className="text-sm font-semibold text-gray-800 mb-2">Have a coupon?</div>
-              <div className="flex gap-2">
-                <input
-                  value={couponCode}
-                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                  placeholder="ENTER CODE"
-                  className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  disabled={couponApplying}
-                />
-                {appliedCoupon ? (
-                  <button
-                    type="button"
-                    onClick={handleRemoveCoupon}
-                    className="px-4 py-2 border rounded-lg hover:bg-gray-50"
-                  >
-                    Remove
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleApplyCoupon}
-                    className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-60"
+            {/* Coupon (logged-in users only) */}
+            {user ? (
+              <div className="border-t pt-4">
+                <div className="text-sm font-semibold text-gray-800 mb-2">Have a coupon?</div>
+                <div className="flex gap-2">
+                  <input
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    placeholder="ENTER CODE"
+                    className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                     disabled={couponApplying}
-                  >
-                    {couponApplying ? 'Applying…' : 'Apply'}
-                  </button>
-                )}
-              </div>
-              {couponError ? <div className="mt-2 text-sm text-red-600">{couponError}</div> : null}
-              {appliedCoupon ? (
-                <div className="mt-2 text-xs text-green-700">
-                  Applied: <span className="font-semibold">{appliedCoupon.code}</span>
+                  />
+                  {appliedCoupon ? (
+                    <button
+                      type="button"
+                      onClick={handleRemoveCoupon}
+                      className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                    >
+                      Remove
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleApplyCoupon}
+                      className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-60"
+                      disabled={couponApplying}
+                    >
+                      {couponApplying ? 'Applying…' : 'Apply'}
+                    </button>
+                  )}
                 </div>
-              ) : null}
-            </div>
+                {couponError ? <div className="mt-2 text-sm text-red-600">{couponError}</div> : null}
+                {appliedCoupon ? (
+                  <div className="mt-2 text-xs text-green-700">
+                    Applied: <span className="font-semibold">{appliedCoupon.code}</span>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="border-t pt-4 text-sm text-gray-600">
+                Login to apply coupons.
+              </div>
+            )}
+
+            {/* SweetCoin (logged-in users only) */}
+            {user ? (
+              <div className="border-t pt-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-gray-800">Use 🪙 SweetCoin</div>
+                  <div className="text-xs text-gray-600">Balance: <span className="font-semibold">🪙 {sweetCoinBalance}</span></div>
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={sweetCoinBalance}
+                    value={sweetCoinToUse}
+                    onChange={(e) => setSweetCoinToUse(e.target.value)}
+                    className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    placeholder="0"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setSweetCoinToUse(sweetCoinBalance)}
+                    className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                    disabled={sweetCoinBalance <= 0}
+                  >
+                    Use Max
+                  </button>
+                </div>
+                <div className="mt-2 text-xs text-gray-600">
+                  🪙 SweetCoin applies as ₹ discount on this order.
+                </div>
+              </div>
+            ) : null}
 
             <div className="border-t pt-2 space-y-2">
               <div className="flex justify-between">
@@ -733,6 +783,12 @@ function Checkout() {
                 <div className="flex justify-between text-green-700">
                   <span>Coupon Discount</span>
                   <span>-₹{discountAmount.toFixed(2)}</span>
+                </div>
+              ) : null}
+              {user && sweetCoinApplied > 0 ? (
+                <div className="flex justify-between text-green-700">
+                  <span>🪙 SweetCoin Used</span>
+                  <span>-₹{sweetCoinApplied.toFixed(2)}</span>
                 </div>
               ) : null}
               <div className="flex justify-between text-xl font-bold pt-2 border-t">

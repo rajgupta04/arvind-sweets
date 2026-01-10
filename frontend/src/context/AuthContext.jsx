@@ -41,6 +41,15 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+  const refreshProfile = useCallback(async () => {
+    const response = await getProfile();
+    setUser(response.data);
+    try {
+      localStorage.setItem('user', JSON.stringify(response.data));
+    } catch {}
+    return response.data;
+  }, []);
+
   useEffect(() => {
     if (bootstrappedRef.current) return;
     bootstrappedRef.current = true;
@@ -185,8 +194,9 @@ export const AuthProvider = ({ children }) => {
     loginWithToken,
     registerUser,
     updateUser,
+    refreshProfile,
     logout,
-  }), [user, token, loading, authEvent, loginUser, loginWithToken, registerUser, updateUser, logout]);
+  }), [user, token, loading, authEvent, loginUser, loginWithToken, registerUser, updateUser, refreshProfile, logout]);
 
   return (
     <AuthContext.Provider value={value}>

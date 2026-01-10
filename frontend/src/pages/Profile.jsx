@@ -4,12 +4,16 @@ import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import Loader from '../components/Loader';
 import { FiUser, FiMail, FiPhone, FiMapPin, FiEdit2, FiSave, FiX, FiPackage, FiLogOut } from 'react-icons/fi';
+import { getMyOrders } from '../services/orderService';
 
 function Profile() {
-  const { user, updateUser, logout, loading: authLoading } = useContext(AuthContext);
+  const { user, updateUser, refreshProfile, logout, loading: authLoading } = useContext(AuthContext);
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [nowMs, setNowMs] = useState(Date.now());
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -46,6 +50,62 @@ function Profile() {
       }
     });
   }, [user, authLoading, navigate]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) return;
+    // Refresh to show latest SweetCoin balance after delivery.
+    refreshProfile().catch(() => {});
+  }, [authLoading, user, refreshProfile]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        setOrdersLoading(true);
+        const res = await getMyOrders();
+        if (!cancelled) setOrders(Array.isArray(res.data) ? res.data : []);
+      } catch {
+        if (!cancelled) setOrders([]);
+      } finally {
+        if (!cancelled) setOrdersLoading(false);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user]);
+
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const sweetCoinBalance = Math.max(0, Math.floor(Number(user?.sweetCoinBalance) || 0));
+
+  const pendingSweetCoinOrders = orders
+    .filter((o) => o && o.orderStatus !== 'Delivered' && o.orderStatus !== 'Cancelled')
+    .filter((o) => (Number(o.sweetCoinEarned) || 0) > 0)
+    .sort((a, b) => {
+      const ta = a.estimatedDelivery ? new Date(a.estimatedDelivery).getTime() : 0;
+      const tb = b.estimatedDelivery ? new Date(b.estimatedDelivery).getTime() : 0;
+      return ta - tb;
+    });
+
+  const pendingSweetCoinTotal = pendingSweetCoinOrders.reduce((sum, o) => sum + (Math.floor(Number(o.sweetCoinEarned) || 0)), 0);
+
+  const formatRemaining = (ms) => {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const ss = s % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${ss}s`;
+    return `${ss}s`;
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -297,6 +357,37 @@ function Profile() {
                   </span>
                 </div>
               </div>
+            </div>
+
+            {/* SweetCoin */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">🪙 SweetCoin</h3>
+              <p className="text-sm text-gray-600 mb-4">Earn 10% cashback after delivery. Use 🪙 SweetCoin on your next order.</p>
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Available</span>
+                <span className="text-sm font-semibold text-gray-900">🪙 {sweetCoinBalance}</span>
+              </div>
+
+              <div className="mt-2 flex items-center justify-between">
+                <span className="text-sm text-gray-600">Pending</span>
+                <span className="text-sm font-semibold text-gray-900">🪙 {pendingSweetCoinTotal}</span>
+              </div>
+
+              {ordersLoading ? (
+                <div className="mt-3 text-xs text-gray-500">Loading pending rewards…</div>
+              ) : pendingSweetCoinOrders.length > 0 ? (
+                <div className="mt-3 text-xs text-gray-600">
+                  Next reward: <span className="font-semibold">🪙 {Math.floor(Number(pendingSweetCoinOrders[0].sweetCoinEarned) || 0)}</span>
+                  {pendingSweetCoinOrders[0].estimatedDelivery ? (
+                    <> in <span className="font-semibold">{formatRemaining(new Date(pendingSweetCoinOrders[0].estimatedDelivery).getTime() - nowMs)}</span></>
+                  ) : (
+                    <> after delivery</>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-3 text-xs text-gray-500">No pending rewards right now.</div>
+              )}
             </div>
           </div>
         </div>

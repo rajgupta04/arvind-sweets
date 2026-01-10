@@ -23,6 +23,7 @@ import { protect, admin, authorizeRoles } from '../middleware/authMiddleware.js'
 const router = express.Router();
 
 router.post('/', protect, createOrder);
+router.post('/guest', createOrder);
 router.get('/myorders', protect, getMyOrders);
 router.get('/delivery/my-packages', protect, authorizeRoles('delivery_boy'), getMyDeliveryOrders);
 router.get('/latest', protect, admin, getLatestOrder);

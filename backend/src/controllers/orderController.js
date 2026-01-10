@@ -28,6 +28,77 @@ import {
 const DEFAULT_DELIVERY_CHARGE = 50;
 const FREE_DELIVERY_THRESHOLD = 250;
 
+const SWEETCOIN_PERCENT_DEFAULT = 10;
+
+function toInt(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return Math.trunc(n);
+}
+
+function computeSweetCoinEarned(amount, percent) {
+  const p = Number(percent);
+  const a = Number(amount);
+  if (!Number.isFinite(p) || p <= 0) return 0;
+  if (!Number.isFinite(a) || a <= 0) return 0;
+  // ₹1 == 1 SweetCoin (integer), cashback percent is floored
+  return Math.max(0, Math.floor((a * p) / 100));
+}
+
+async function maybeCreditSweetCoinsForDeliveredOrder(orderId) {
+  if (!orderId) return;
+  const order = await Order.findById(orderId).select('user orderStatus sweetCoinEarned sweetCoinCreditedAt');
+  if (!order) return;
+  if (String(order.orderStatus || '') !== 'Delivered') return;
+  if (!order.user) return;
+  if (order.sweetCoinCreditedAt) return;
+  const earned = Math.max(0, Math.floor(Number(order.sweetCoinEarned) || 0));
+  if (earned <= 0) return;
+
+  const now = new Date();
+  // Lock by setting creditedAt exactly once to prevent double-credit.
+  const lock = await Order.updateOne(
+    { _id: order._id, sweetCoinCreditedAt: null, orderStatus: 'Delivered' },
+    { $set: { sweetCoinCreditedAt: now, sweetCoinStatus: 'credited' } }
+  );
+  if (lock.modifiedCount !== 1) return;
+
+  const inc = await User.updateOne(
+    { _id: order.user },
+    { $inc: { sweetCoinBalance: earned } }
+  );
+  if (inc.matchedCount !== 1) {
+    // Best-effort rollback if user no longer exists
+    await Order.updateOne(
+      { _id: order._id, sweetCoinCreditedAt: now },
+      { $set: { sweetCoinCreditedAt: null, sweetCoinStatus: 'pending' } }
+    );
+  }
+}
+
+async function maybeRefundSweetCoinsForCancelledOrder(orderId) {
+  if (!orderId) return;
+  const order = await Order.findById(orderId).select('user orderStatus sweetCoinUsed sweetCoinRefundedAt');
+  if (!order) return;
+  if (String(order.orderStatus || '') !== 'Cancelled') return;
+  if (!order.user) return;
+  if (order.sweetCoinRefundedAt) return;
+  const used = Math.max(0, Math.floor(Number(order.sweetCoinUsed) || 0));
+  if (used <= 0) return;
+
+  const now = new Date();
+  const lock = await Order.updateOne(
+    { _id: order._id, sweetCoinRefundedAt: null, orderStatus: 'Cancelled' },
+    { $set: { sweetCoinRefundedAt: now } }
+  );
+  if (lock.modifiedCount !== 1) return;
+
+  await User.updateOne(
+    { _id: order.user },
+    { $inc: { sweetCoinBalance: used } }
+  );
+}
+
 function haversineDistanceKm(aLat, aLng, bLat, bLng) {
   const toRad = (v) => (v * Math.PI) / 180;
   const R = 6371;
@@ -119,6 +190,9 @@ function getFrontendBaseUrl() {
 // @route   POST /api/orders
 // @access  Private
 export const createOrder = async (req, res) => {
+  let sweetCoinUsedAppliedForThisRequest = 0;
+  let sweetCoinDeductedUserIdForThisRequest = null;
+
   try {
     const {
       orderItems,
@@ -130,6 +204,10 @@ export const createOrder = async (req, res) => {
       userLatitude,
       userLongitude
     } = req.body;
+
+    if (couponCode && !req.user?._id) {
+      return res.status(401).json({ message: 'Login required to use coupons' });
+    }
 
     if (orderItems && orderItems.length === 0) {
       return res.status(400).json({ message: 'No order items' });
@@ -414,10 +492,41 @@ export const createOrder = async (req, res) => {
       }
     }
 
-    const computedTotalPrice = Math.max(0, Math.round((computedItemsPrice + computedDeliveryCharge - discountAmount) * 100) / 100);
+    const computedTotalBeforeSweetCoin = Math.max(0, Math.round((computedItemsPrice + computedDeliveryCharge - discountAmount) * 100) / 100);
+
+    // SweetCoin redemption (only for logged-in users)
+    const requestedSweetCoinUsed = toInt(req.body?.sweetCoinUsed) || 0;
+    let sweetCoinUsed = 0;
+    if (requestedSweetCoinUsed > 0 && req.user?._id) {
+      const userDoc = await User.findById(req.user._id).select('sweetCoinBalance');
+      const balance = Math.max(0, Math.floor(Number(userDoc?.sweetCoinBalance) || 0));
+      const maxByTotal = Math.floor(Math.max(0, computedTotalBeforeSweetCoin));
+      const desired = Math.max(0, Math.floor(requestedSweetCoinUsed));
+      const usable = Math.min(balance, desired, maxByTotal);
+
+      if (usable > 0) {
+        const dec = await User.updateOne(
+          { _id: req.user._id, sweetCoinBalance: { $gte: usable } },
+          { $inc: { sweetCoinBalance: -usable } }
+        );
+        if (dec.modifiedCount !== 1) {
+          return res.status(400).json({ message: 'Unable to apply SweetCoin balance. Please retry.' });
+        }
+        sweetCoinUsed = usable;
+        sweetCoinUsedAppliedForThisRequest = usable;
+        sweetCoinDeductedUserIdForThisRequest = String(req.user._id);
+      }
+    }
+
+    const computedTotalPrice = Math.max(0, Math.round((computedTotalBeforeSweetCoin - sweetCoinUsed) * 100) / 100);
+
+    // SweetCoin earning (pending until Delivered, only for logged-in users)
+    const sweetCoinPercent = SWEETCOIN_PERCENT_DEFAULT;
+    const netPaidForRewards = Math.max(0, (computedPaidItemsPrice - discountAmount));
+    const sweetCoinEarned = req.user?._id ? computeSweetCoinEarned(netPaidForRewards, sweetCoinPercent) : 0;
 
     const orderData = {
-      user: req.user._id,
+      user: req.user?._id || null,
       orderItems: normalizedOrderItems,
       shippingAddress,
       paymentMethod,
@@ -428,6 +537,20 @@ export const createOrder = async (req, res) => {
       totalPrice: computedTotalPrice,
       paymentStatus: paymentStatus || 'Pending'
     };
+
+    if (sweetCoinUsed > 0 && req.user?._id) {
+      orderData.sweetCoinUsed = sweetCoinUsed;
+      orderData.sweetCoinUsedAt = new Date();
+    }
+    if (sweetCoinEarned > 0 && req.user?._id) {
+      orderData.sweetCoinPercent = sweetCoinPercent;
+      orderData.sweetCoinEarned = sweetCoinEarned;
+      orderData.sweetCoinStatus = 'pending';
+    } else {
+      orderData.sweetCoinPercent = sweetCoinPercent;
+      orderData.sweetCoinEarned = 0;
+      orderData.sweetCoinStatus = 'none';
+    }
 
     // Haversine-based ETA calculation
     try {
@@ -468,10 +591,12 @@ export const createOrder = async (req, res) => {
     const order = new Order(orderData);
 
     const createdOrder = await order.save();
-    const populatedOrder = await createdOrder.populate('user', 'name email');
+    const populatedOrder = createdOrder.user
+      ? await createdOrder.populate('user', 'name email')
+      : createdOrder;
 
     // Record coupon usage only after order is created
-    if (couponDoc && discountAmount > 0) {
+    if (couponDoc && discountAmount > 0 && req.user?._id) {
       try {
         await recordCouponUsage({ couponId: couponDoc._id, userId: req.user._id });
       } catch (e) {
@@ -479,8 +604,16 @@ export const createOrder = async (req, res) => {
       }
     }
 
-    notifyOwner(populatedOrder);
-    sendOrderEmail(populatedOrder);
+    try {
+      notifyOwner(populatedOrder);
+    } catch (e) {
+      console.warn('Owner notification failed:', e?.message || e);
+    }
+    try {
+      sendOrderEmail(populatedOrder);
+    } catch (e) {
+      console.warn('Order email failed:', e?.message || e);
+    }
 
     // WhatsApp Cloud API (Meta test number) notifications (optional)
     if (isWhatsAppCloudEnabled()) {
@@ -519,6 +652,15 @@ export const createOrder = async (req, res) => {
     }
     res.status(201).json(responseBody);
   } catch (error) {
+    // If we deducted SweetCoins but order creation failed, best-effort refund.
+    try {
+      if (sweetCoinUsedAppliedForThisRequest > 0 && sweetCoinDeductedUserIdForThisRequest) {
+        await User.updateOne(
+          { _id: sweetCoinDeductedUserIdForThisRequest },
+          { $inc: { sweetCoinBalance: sweetCoinUsedAppliedForThisRequest } }
+        );
+      }
+    } catch {}
     res.status(500).json({ message: error.message });
   }
 };
@@ -665,6 +807,12 @@ export const updateOrderToDelivered = async (req, res) => {
 
       const updatedOrder = await order.save();
 
+      try {
+        await maybeCreditSweetCoinsForDeliveredOrder(updatedOrder._id);
+      } catch (e) {
+        console.warn('SweetCoin credit failed:', e?.message || e);
+      }
+
       const io = req.app.get('io');
       if (io) {
         io.to(`order_${order._id}`).emit('orderStatusUpdated', {
@@ -700,6 +848,17 @@ export const updateOrderStatus = async (req, res) => {
       }
 
       const updatedOrder = await order.save();
+
+      try {
+        if (orderStatus === 'Delivered') {
+          await maybeCreditSweetCoinsForDeliveredOrder(updatedOrder._id);
+        }
+        if (orderStatus === 'Cancelled') {
+          await maybeRefundSweetCoinsForCancelledOrder(updatedOrder._id);
+        }
+      } catch (e) {
+        console.warn('SweetCoin post-status hook failed:', e?.message || e);
+      }
 
       const io = req.app.get('io');
       if (io) {
@@ -765,6 +924,12 @@ export const cancelOrder = async (req, res) => {
     };
 
     const updatedOrder = await order.save();
+
+    try {
+      await maybeRefundSweetCoinsForCancelledOrder(updatedOrder._id);
+    } catch (e) {
+      console.warn('SweetCoin refund failed:', e?.message || e);
+    }
 
     const populatedOrder = await Order.findById(updatedOrder._id)
       .populate('user', 'name email')
@@ -1007,6 +1172,12 @@ export const markDeliveredByDeliveryBoy = async (req, res) => {
     order.trackingPausedAt = new Date();
 
     const updated = await order.save();
+
+    try {
+      await maybeCreditSweetCoinsForDeliveredOrder(updated._id);
+    } catch (e) {
+      console.warn('SweetCoin credit failed:', e?.message || e);
+    }
 
     const io = req.app.get('io');
     if (io) {

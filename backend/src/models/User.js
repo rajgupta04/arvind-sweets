@@ -120,6 +120,13 @@ const userSchema = new mongoose.Schema({
       default: 0
     }
   },
+
+  // Loyalty points (₹1 == 1 SweetCoin)
+  sweetCoinBalance: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   resetPasswordToken: String,
   resetPasswordExpire: Date
 }, {
