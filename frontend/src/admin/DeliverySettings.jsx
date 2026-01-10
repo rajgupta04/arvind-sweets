@@ -12,6 +12,7 @@ function DeliverySettings() {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [buffer, setBuffer] = useState(10);
   const [showProductQuantity, setShowProductQuantity] = useState(true);
   const [rangeEnabled, setRangeEnabled] = useState(false);
@@ -185,10 +186,10 @@ function DeliverySettings() {
   if (loading) {
     return (
       <div className="flex min-h-screen bg-gray-100">
-        <AdminSidebar />
-        <div className="flex-1 ml-64">
-          <AdminNavbar />
-          <main className="p-8 mt-16">
+        <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <div className="flex-1 lg:ml-64">
+          <AdminNavbar onMenuClick={() => setSidebarOpen((v) => !v)} />
+          <main className="p-4 sm:p-6 lg:p-8 mt-16">
             <div className="flex items-center justify-center min-h-[400px]">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
             </div>
@@ -200,10 +201,10 @@ function DeliverySettings() {
 
   return (
     <div className="flex min-h-screen bg-gray-100">
-      <AdminSidebar />
-      <div className="flex-1 ml-64">
-        <AdminNavbar />
-        <main className="p-8 mt-16">
+      <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <div className="flex-1 lg:ml-64">
+        <AdminNavbar onMenuClick={() => setSidebarOpen((v) => !v)} />
+        <main className="p-4 sm:p-6 lg:p-8 mt-16">
           <div className="max-w-xl bg-white rounded-lg shadow-md p-6">
             <h1 className="text-2xl font-bold text-gray-800 mb-4">Delivery Settings</h1>
             <p className="text-gray-600 mb-6">Adjust the delivery buffer time used for ETA calculations.</p>

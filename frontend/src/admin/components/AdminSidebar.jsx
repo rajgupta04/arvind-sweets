@@ -8,10 +8,11 @@ import {
   FiList,
   FiTag,
   FiLogOut,
-  FiUser
+  FiUser,
+  FiX
 } from 'react-icons/fi';
 
-function AdminSidebar() {
+function AdminSidebar({ open = false, onClose } = {}) {
   const location = useLocation();
 
   const menuItems = [
@@ -41,9 +42,37 @@ function AdminSidebar() {
   };
 
   return (
-    <div className="fixed left-0 top-0 h-full w-64 bg-gray-900 text-white shadow-lg z-40">
+    <>
+      {/* Mobile overlay */}
+      <div
+        className={
+          `fixed inset-0 bg-black/50 z-40 lg:hidden transition-opacity ` +
+          (open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none')
+        }
+        onClick={onClose}
+      />
+
+      <div
+        className={
+          `fixed left-0 top-0 h-full w-64 bg-gray-900 text-white shadow-lg z-50 ` +
+          `transform transition-transform duration-200 ` +
+          (open ? 'translate-x-0' : '-translate-x-full') +
+          ' lg:translate-x-0'
+        }
+      >
       <div className="p-6">
+        <div className="flex items-center justify-between mb-8">
         <h2 className="text-2xl font-bold text-orange-500 mb-8">Admin Panel</h2>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="lg:hidden text-gray-300 hover:text-white"
+            aria-label="Close menu"
+          >
+            <FiX className="w-6 h-6" />
+          </button>
+        </div>
         <nav className="space-y-2">
           {menuItems.map((item) => {
             const Icon = item.icon;
@@ -51,6 +80,7 @@ function AdminSidebar() {
               <Link
                 key={item.path}
                 to={item.path}
+                onClick={onClose}
                 className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
                   isActive(item.path)
                     ? 'bg-orange-600 text-white'
@@ -74,7 +104,8 @@ function AdminSidebar() {
           <span className="font-medium">Logout</span>
         </button>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

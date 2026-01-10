@@ -10,6 +10,7 @@ import { createProduct } from '../services/adminApi';
 function AddProduct() {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   React.useEffect(() => {
@@ -39,10 +40,10 @@ function AddProduct() {
 
   return (
     <div className="flex min-h-screen bg-gray-100">
-      <AdminSidebar />
-      <div className="flex-1 ml-64">
-        <AdminNavbar />
-        <main className="p-8 mt-16">
+      <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <div className="flex-1 lg:ml-64">
+        <AdminNavbar onMenuClick={() => setSidebarOpen((v) => !v)} />
+        <main className="p-4 sm:p-6 lg:p-8 mt-16">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-800">Add New Product</h1>
             <p className="text-gray-600 mt-2">Create a new product listing for your sweet shop</p>

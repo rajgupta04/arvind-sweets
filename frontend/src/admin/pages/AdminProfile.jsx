@@ -22,6 +22,7 @@ function AdminProfile() {
       pincode: ''
     }
   });
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -93,10 +94,10 @@ function AdminProfile() {
 
   return (
     <div className="flex min-h-screen bg-gray-100">
-      <AdminSidebar />
-      <div className="flex-1 ml-64">
-        <AdminNavbar />
-        <main className="p-8 mt-16">
+      <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <div className="flex-1 lg:ml-64">
+        <AdminNavbar onMenuClick={() => setSidebarOpen((v) => !v)} />
+        <main className="p-4 sm:p-6 lg:p-8 mt-16">
           <div className="max-w-4xl mx-auto">
             {/* Header */}
             <div className="mb-8">

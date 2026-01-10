@@ -160,7 +160,7 @@ function AdminNavbar({ onMenuClick }) {
   };
 
   return (
-    <nav className="fixed top-0 left-64 right-0 h-16 bg-white shadow-md z-30 flex items-center justify-between px-6">
+    <nav className="fixed top-0 left-0 lg:left-64 right-0 h-16 bg-white shadow-md z-30 flex items-center justify-between px-4 sm:px-6">
       <div className="flex items-center space-x-4">
         <button
           onClick={onMenuClick}

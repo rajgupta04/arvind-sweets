@@ -14,6 +14,7 @@ function ProductsList() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (!user || user.role !== 'admin') {
@@ -62,10 +63,10 @@ function ProductsList() {
   if (loading) {
     return (
       <div className="flex min-h-screen bg-gray-100">
-        <AdminSidebar />
-        <div className="flex-1 ml-64">
-          <AdminNavbar />
-          <main className="p-8 mt-16">
+        <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <div className="flex-1 lg:ml-64">
+          <AdminNavbar onMenuClick={() => setSidebarOpen((v) => !v)} />
+          <main className="p-4 sm:p-6 lg:p-8 mt-16">
             <div className="flex items-center justify-center min-h-[400px]">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
             </div>
@@ -77,11 +78,11 @@ function ProductsList() {
 
   return (
     <div className="flex min-h-screen bg-gray-100">
-      <AdminSidebar />
-      <div className="flex-1 ml-64">
-        <AdminNavbar />
-        <main className="p-8 mt-16">
-          <div className="flex justify-between items-center mb-8">
+      <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <div className="flex-1 lg:ml-64">
+        <AdminNavbar onMenuClick={() => setSidebarOpen((v) => !v)} />
+        <main className="p-4 sm:p-6 lg:p-8 mt-16">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8">
             <div>
               <h1 className="text-3xl font-bold text-gray-800">All Products</h1>
               <p className="text-gray-600 mt-2">Manage your product inventory</p>
@@ -109,8 +110,72 @@ function ProductsList() {
                 </button>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
+              <>
+                {/* Mobile tiles */}
+                <div className="md:hidden divide-y">
+                  {products.map((product) => (
+                    <div key={product._id} className="p-4">
+                      <div className="flex gap-4">
+                        <div className="shrink-0">
+                          {product.images && product.images.length > 0 ? (
+                            <img
+                              src={getAdminThumbUrl(product.images[0])}
+                              alt={product.name}
+                              className="w-20 h-20 object-cover rounded-lg"
+                            />
+                          ) : (
+                            <div className="w-20 h-20 bg-gray-200 rounded-lg flex items-center justify-center">
+                              <FiImage className="w-6 h-6 text-gray-400" />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-gray-900 truncate">{product.name}</div>
+                              <div className="text-sm text-gray-600">{product.category}</div>
+                              <div className="mt-1 text-sm text-gray-900 font-medium">₹{product.price}</div>
+                              <div className="mt-1 text-sm text-gray-700">Stock: {product.stock}</div>
+                              <div className="mt-1">
+                                <span
+                                  className={
+                                    `inline-flex px-2 py-1 text-xs font-semibold rounded-full ` +
+                                    (product.isAvailable && product.stock > 0
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-red-100 text-red-800')
+                                  }
+                                >
+                                  {product.isAvailable && product.stock > 0 ? 'Available' : 'Out of Stock'}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="shrink-0 flex flex-col gap-2">
+                              <button
+                                onClick={() => handleEdit(product._id)}
+                                className="px-3 py-2 border rounded-lg text-blue-700 hover:bg-blue-50"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDelete(product._id)}
+                                disabled={deletingId === product._id}
+                                className="px-3 py-2 border rounded-lg text-red-700 hover:bg-red-50 disabled:opacity-50"
+                              >
+                                {deletingId === product._id ? 'Deleting…' : 'Delete'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -219,7 +284,8 @@ function ProductsList() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+                </div>
+              </>
             )}
           </div>
         </main>

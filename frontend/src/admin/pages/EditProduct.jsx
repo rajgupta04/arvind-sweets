@@ -11,6 +11,7 @@ function EditProduct() {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
   const { id } = useParams();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -58,10 +59,10 @@ function EditProduct() {
   if (loading) {
     return (
       <div className="flex min-h-screen bg-gray-100">
-        <AdminSidebar />
-        <div className="flex-1 ml-64">
-          <AdminNavbar />
-          <main className="p-8 mt-16">
+        <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <div className="flex-1 lg:ml-64">
+          <AdminNavbar onMenuClick={() => setSidebarOpen((v) => !v)} />
+          <main className="p-4 sm:p-6 lg:p-8 mt-16">
             <div className="flex items-center justify-center min-h-[400px]">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
             </div>
@@ -77,10 +78,10 @@ function EditProduct() {
 
   return (
     <div className="flex min-h-screen bg-gray-100">
-      <AdminSidebar />
-      <div className="flex-1 ml-64">
-        <AdminNavbar />
-        <main className="p-8 mt-16">
+      <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <div className="flex-1 lg:ml-64">
+        <AdminNavbar onMenuClick={() => setSidebarOpen((v) => !v)} />
+        <main className="p-4 sm:p-6 lg:p-8 mt-16">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-800">Edit Product</h1>
             <p className="text-gray-600 mt-2">Update product information</p>

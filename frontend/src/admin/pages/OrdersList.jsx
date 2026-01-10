@@ -24,6 +24,7 @@ function OrdersList() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [updatingStatusId, setUpdatingStatusId] = useState(null);
@@ -426,10 +427,10 @@ function OrdersList() {
 
   return (
     <div className="flex min-h-screen bg-gray-100">
-      <AdminSidebar />
-      <div className="flex-1 ml-64">
-        <AdminNavbar />
-        <main className="p-8 mt-16">
+      <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <div className="flex-1 lg:ml-64">
+        <AdminNavbar onMenuClick={() => setSidebarOpen((v) => !v)} />
+        <main className="p-4 sm:p-6 lg:p-8 mt-16">
           <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className="text-3xl font-bold text-gray-800">Orders</h1>
@@ -438,7 +439,73 @@ function OrdersList() {
           </div>
 
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="overflow-x-auto">
+            {/* Mobile: tiles */}
+            <div className="md:hidden">
+              {loading ? (
+                <div className="px-4 py-10 text-center text-gray-500">Loading orders...</div>
+              ) : orders.length === 0 ? (
+                <div className="px-4 py-10 text-center text-gray-500">No orders yet.</div>
+              ) : (
+                <div className="divide-y">
+                  {orders.map((order) => (
+                    <div
+                      key={order._id}
+                      className={
+                        `p-4 ` +
+                        (order.orderStatus === 'Cancelled'
+                          ? 'bg-red-50'
+                          : order.orderStatus === 'Delivered'
+                            ? 'bg-green-50'
+                            : 'bg-white')
+                      }
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="text-sm font-mono text-gray-900 break-all">{order._id}</div>
+                          <div className="mt-1 text-sm font-medium text-gray-900 truncate">
+                            {order.shippingAddress?.name || 'N/A'}
+                          </div>
+                          <div className="text-sm text-gray-600 truncate">{order.user?.email}</div>
+                          <div className="mt-2 flex items-center gap-2 flex-wrap">
+                            <div className="text-sm font-semibold text-gray-900">{formatCurrency(order.totalPrice)}</div>
+                            {renderStatusBadge(order.paymentStatus || 'Pending')}
+                            {renderStatusBadge(order.orderStatus || 'Pending')}
+                          </div>
+                          <div className="mt-2 text-sm text-gray-600">{new Date(order.createdAt).toLocaleString()}</div>
+                          <div className="mt-2">
+                            <label className="block text-xs text-gray-500 mb-1">Order Status</label>
+                            <select
+                              value={order.orderStatus}
+                              onChange={(e) => handleStatusChange(order._id, e.target.value)}
+                              className="w-full border rounded-lg px-3 py-2 text-sm"
+                              disabled={updatingStatusId === order._id}
+                            >
+                              {statusOptions.map((status) => (
+                                <option key={status} value={status}>
+                                  {status}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0">
+                          <button
+                            onClick={() => openModal(order)}
+                            className="inline-flex items-center justify-center px-3 py-2 border rounded-lg text-gray-700 hover:bg-gray-100"
+                          >
+                            View
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Desktop: table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>

@@ -15,6 +15,8 @@ export default function UsersList() {
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState('');
 
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -159,10 +161,10 @@ export default function UsersList() {
 
   return (
     <div className="flex min-h-screen bg-gray-100">
-      <AdminSidebar />
-      <div className="flex-1 ml-64">
-        <AdminNavbar />
-        <main className="p-8 mt-16">
+      <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <div className="flex-1 lg:ml-64">
+        <AdminNavbar onMenuClick={() => setSidebarOpen((v) => !v)} />
+        <main className="p-4 sm:p-6 lg:p-8 mt-16">
           <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className="text-3xl font-bold text-gray-800">Users</h1>
@@ -178,7 +180,50 @@ export default function UsersList() {
           </div>
 
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="overflow-x-auto">
+            {/* Mobile: tile/cards */}
+            <div className="md:hidden">
+              {loading ? (
+                <div className="px-4 py-10 text-center text-gray-500">Loading users…</div>
+              ) : users.length === 0 ? (
+                <div className="px-4 py-10 text-center text-gray-500">No users found.</div>
+              ) : (
+                <div className="divide-y">
+                  {users.map((u) => (
+                    <div key={u._id} className="p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-gray-900 truncate">{u.name}</div>
+                          <div className="text-sm text-gray-600 truncate">{u.email}</div>
+                          <div className="mt-1 text-sm text-gray-700">Phone: {u.phone || '—'}</div>
+                          <div className="mt-1 text-sm text-gray-700">Role: {u.role || 'customer'}</div>
+                          <div className="mt-1 text-sm text-gray-700">🪙 SweetCoin: {Number(u?.sweetCoinBalance) || 0}</div>
+                        </div>
+
+                        <div className="shrink-0 flex flex-col gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openEdit(u)}
+                            className="inline-flex items-center justify-center px-3 py-2 border rounded-lg text-gray-700 hover:bg-gray-100"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(u)}
+                            className="inline-flex items-center justify-center px-3 py-2 border rounded-lg text-red-700 hover:bg-red-50"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Desktop: table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>

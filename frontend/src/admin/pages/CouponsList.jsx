@@ -32,6 +32,8 @@ export default function CouponsList() {
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState('');
 
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const [uploadingImage, setUploadingImage] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -217,11 +219,11 @@ export default function CouponsList() {
 
   return (
     <div className="flex min-h-screen bg-gray-100">
-      <AdminSidebar />
-      <div className="flex-1 ml-64">
-        <AdminNavbar />
+      <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <div className="flex-1 lg:ml-64">
+        <AdminNavbar onMenuClick={() => setSidebarOpen((v) => !v)} />
 
-        <main className="p-8 mt-16">
+        <main className="p-4 sm:p-6 lg:p-8 mt-16">
           <div className="flex items-start justify-between gap-4 mb-8">
             <div>
               <h1 className="text-3xl font-bold text-gray-800">Coupons</h1>
@@ -243,7 +245,65 @@ export default function CouponsList() {
           ) : null}
 
           <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="overflow-x-auto">
+            {/* Mobile: tiles */}
+            <div className="md:hidden">
+              {loading ? (
+                <div className="px-4 py-10 text-center text-gray-500">Loading coupons…</div>
+              ) : coupons.length === 0 ? (
+                <div className="px-4 py-10 text-center text-gray-500">No coupons found.</div>
+              ) : (
+                <div className="divide-y">
+                  {coupons.map((c) => (
+                    <div key={c._id} className="p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-gray-900 truncate">{c.code}</div>
+                          <div className="mt-1 text-sm text-gray-700 truncate">{c.title || '—'}</div>
+                          <div className="mt-2 text-sm text-gray-700">
+                            Discount: {c.discountType === 'percent' ? `${Number(c.discountValue) || 0}%` : `₹${Number(c.discountValue) || 0}`}
+                          </div>
+                          <div className="text-sm text-gray-700">Min Order: ₹{Number(c.minOrderValue) || 0}</div>
+                          <div className="mt-2 flex items-center gap-2 flex-wrap">
+                            <span className={
+                              `inline-flex items-center px-2 py-1 rounded text-xs font-medium ` +
+                              (c.showOnLoginPopup ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-700')
+                            }>
+                              Popup: {c.showOnLoginPopup ? 'Yes' : 'No'}
+                            </span>
+                            <span className={
+                              `inline-flex items-center px-2 py-1 rounded text-xs font-medium ` +
+                              (c.isActive ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-700')
+                            }>
+                              {c.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 flex flex-col gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openEdit(c)}
+                            className="px-3 py-2 border rounded-lg text-gray-700 hover:bg-gray-100"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDelete(c)}
+                            className="px-3 py-2 border rounded-lg text-red-700 hover:bg-red-50"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Desktop: table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="min-w-full">
                 <thead className="bg-gray-50">
                   <tr>

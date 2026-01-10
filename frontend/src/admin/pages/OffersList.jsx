@@ -30,6 +30,8 @@ export default function OffersList() {
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState('');
 
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const [modalOpen, setModalOpen] = useState(false);
   const [editingOffer, setEditingOffer] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -152,11 +154,11 @@ export default function OffersList() {
 
   return (
     <div className="flex min-h-screen bg-gray-100">
-      <AdminSidebar />
-      <div className="flex-1 ml-64">
-        <AdminNavbar />
-        <main className="p-8 mt-16">
-          <div className="flex items-center justify-between mb-8">
+      <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <div className="flex-1 lg:ml-64">
+        <AdminNavbar onMenuClick={() => setSidebarOpen((v) => !v)} />
+        <main className="p-4 sm:p-6 lg:p-8 mt-16">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
             <div>
               <h1 className="text-3xl font-bold text-gray-800">Offers</h1>
               <p className="text-gray-600 mt-2">Create and manage seasonal offers shown on the Home page.</p>
@@ -171,7 +173,55 @@ export default function OffersList() {
           </div>
 
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="overflow-x-auto">
+            {/* Mobile: tiles */}
+            <div className="md:hidden">
+              {loading ? (
+                <div className="px-4 py-10 text-center text-gray-500">Loading offers…</div>
+              ) : offers.length === 0 ? (
+                <div className="px-4 py-10 text-center text-gray-500">No offers found.</div>
+              ) : (
+                <div className="divide-y">
+                  {offers.map((o) => (
+                    <div key={o._id} className="p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-gray-900 truncate">{o.title}</div>
+                          <div className="mt-1 text-sm">
+                            {o.active ? (
+                              <span className="inline-flex items-center px-2 py-1 rounded bg-green-50 text-green-700 text-xs font-medium">Active</span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-1 rounded bg-gray-100 text-gray-700 text-xs font-medium">Inactive</span>
+                            )}
+                          </div>
+                          <div className="mt-2 text-sm text-gray-700">Starts: {o.startsAt ? new Date(o.startsAt).toLocaleString() : '—'}</div>
+                          <div className="text-sm text-gray-700">Ends: {o.endsAt ? new Date(o.endsAt).toLocaleString() : '—'}</div>
+                        </div>
+
+                        <div className="shrink-0 flex flex-col gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openEdit(o)}
+                            className="px-3 py-2 border rounded-lg text-gray-700 hover:bg-gray-100"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(o)}
+                            className="px-3 py-2 border rounded-lg text-red-700 hover:bg-red-50"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Desktop: table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
