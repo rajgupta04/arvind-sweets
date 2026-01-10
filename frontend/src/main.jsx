@@ -22,23 +22,45 @@ import './index.css';
   }
 })();
 
+// In some Android/TWA flows (notably after auth), the viewport can briefly report a
+// desktop-like width and then correct itself. Waiting a moment for the viewport to
+// stabilize avoids a visible layout "flash" from desktop → mobile.
+async function waitForStableViewport({ timeoutMs = 800, intervalMs = 50 } = {}) {
+  try {
+    const vv = window.visualViewport;
+    if (!vv) {
+      await new Promise((r) => requestAnimationFrame(() => r()));
+      return;
+    }
+
+    const start = Date.now();
+    let last = Math.round(vv.width);
+    let stableCount = 0;
+
+    while (Date.now() - start < timeoutMs) {
+      await new Promise((r) => setTimeout(r, intervalMs));
+      const next = Math.round(vv.width);
+      if (next === last) {
+        stableCount += 1;
+        if (stableCount >= 2) return;
+      } else {
+        stableCount = 0;
+        last = next;
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+
 // Register Service Worker for PWA/TWA
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    let hasRefreshedForNewSw = false;
-
-    // When a new SW takes control, reload once to ensure fresh HTML/CSS/JS are in sync.
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (hasRefreshedForNewSw) return;
-      hasRefreshedForNewSw = true;
-      window.location.reload();
-    });
-
     navigator.serviceWorker
       .register('/sw.js')
       .then((registration) => {
         console.log('[App] Service Worker registered:', registration.scope);
-        
+
         // Check for updates periodically
         setInterval(() => {
           registration.update();
@@ -50,8 +72,13 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  // <React.StrictMode>
-    <App />
-  // </React.StrictMode>,
-);
+const root = ReactDOM.createRoot(document.getElementById('root'));
+
+(async () => {
+  await waitForStableViewport();
+  root.render(
+    // <React.StrictMode>
+      <App />
+    // </React.StrictMode>,
+  );
+})();
