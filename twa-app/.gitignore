@@ -12,3 +12,6 @@ build/
 # Local tooling
 node_modules/
 *.log
+
+# Local APK packages for sharing
+dist/*.apk

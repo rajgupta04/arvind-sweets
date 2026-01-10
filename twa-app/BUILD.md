@@ -12,6 +12,9 @@ This repo also includes helper scripts:
 - `01_config_bubblewrap.cmd` (points Bubblewrap to JDK 17 + Android SDK)
 - `02_init_twa.cmd` (generates the Android TWA project)
 - `03_build_local_apk.cmd` (builds locally for device testing)
+- `04_install_to_device.cmd` (installs the built APK to a connected phone via ADB)
+- `05_package_apk.cmd` (copies the latest built APK into `twa-app/dist/` for easy sharing)
+- `06_install_dist_apk.cmd` (installs the newest `twa-app/dist/*.apk` to a connected device via ADB)
 
 ## 1) Make sure your site is ready
 
@@ -99,6 +102,30 @@ npx --yes @bubblewrap/cli build
 ```
 
 This produces build artifacts you can use for device testing. Play Store upload can be done later.
+
+## 6b) Install on your Android phone (no Play Store)
+
+1. Enable **Developer options** and **USB debugging** on your phone.
+2. Connect phone via USB.
+3. Run `04_install_to_device.cmd`.
+
+## 6c) Package the APK to share (no Play Store)
+
+After a successful build, run:
+
+```bat
+cd "s:\Workplace\Arvind sweets\twa-app"
+05_package_apk.cmd
+```
+
+It will copy the newest APK from `twa-app/android/app/build/outputs/apk/` into `twa-app/dist/` with a timestamped filename.
+
+## 6d) Install the packaged APK (no Play Store)
+
+```bat
+cd "s:\Workplace\Arvind sweets\twa-app"
+06_install_dist_apk.cmd
+```
 
 ## 7) OAuth / Maps / Payments notes
 

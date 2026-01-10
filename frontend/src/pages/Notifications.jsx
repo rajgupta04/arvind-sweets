@@ -1,6 +1,7 @@
-import React, { useContext, useMemo } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { NotificationsContext } from '../context/NotificationsContext';
+import { toast } from '../components/ui/use-toast';
 
 function formatTime(iso) {
   try {
@@ -14,6 +15,23 @@ function formatTime(iso) {
 
 export default function Notifications() {
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useContext(NotificationsContext);
+  const [notifPermission, setNotifPermission] = useState(() => {
+    try {
+      return typeof Notification !== 'undefined' ? Notification.permission : 'unsupported';
+    } catch {
+      return 'unsupported';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      if (typeof Notification !== 'undefined') {
+        setNotifPermission(Notification.permission);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const list = useMemo(() => (Array.isArray(notifications) ? notifications : []), [notifications]);
 
@@ -41,6 +59,50 @@ export default function Notifications() {
           >
             Clear
           </button>
+        </div>
+      </div>
+
+      <div className="mb-5 rounded-xl border bg-white p-4 shadow-sm">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="font-semibold text-gray-900">Push notifications</div>
+            <div className="text-sm text-gray-600 mt-0.5">
+              Status: <span className="font-mono">{String(notifPermission)}</span>
+            </div>
+            {notifPermission === 'denied' ? (
+              <div className="text-sm text-gray-600 mt-2">
+                Notifications are blocked. Enable them in Android Settings → Apps → Arvind Sweets → Notifications.
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="px-3 py-2 rounded-lg border hover:bg-gray-50 text-sm"
+              disabled={notifPermission === 'granted' || notifPermission === 'unsupported'}
+              onClick={async () => {
+                try {
+                  if (typeof Notification === 'undefined' || !Notification.requestPermission) {
+                    toast({ title: 'Not supported', description: 'Notifications are not supported on this device/browser', variant: 'destructive' });
+                    setNotifPermission('unsupported');
+                    return;
+                  }
+                  const p = await Notification.requestPermission();
+                  setNotifPermission(p);
+                  if (p === 'granted') {
+                    toast({ title: 'Enabled', description: 'Notifications permission granted.' });
+                  } else if (p === 'denied') {
+                    toast({ title: 'Blocked', description: 'Enable notifications from Android Settings → Apps → Arvind Sweets → Notifications.', variant: 'destructive' });
+                  }
+                } catch (e) {
+                  toast({ title: 'Error', description: e?.message || 'Failed to request permission', variant: 'destructive' });
+                }
+              }}
+            >
+              Enable
+            </button>
+          </div>
         </div>
       </div>
 

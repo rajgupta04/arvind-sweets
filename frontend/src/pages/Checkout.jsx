@@ -104,6 +104,7 @@ function Checkout() {
     location: null
   });
   const [gpsSuccess, setGpsSuccess] = useState(false);
+  const [gpsLoading, setGpsLoading] = useState(false);
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState([]);
   const [selectedSavedAddressId, setSelectedSavedAddressId] = useState('');
@@ -561,28 +562,69 @@ function Checkout() {
                 <div className="md:col-span-2 flex items-center space-x-3">
                   <button
                     type="button"
-                    onClick={() => {
-                      if (!navigator.geolocation) {
-                        toast({ title: 'Location error', description: 'Geolocation is not supported', variant: 'destructive' });
+                    onClick={async () => {
+                      try {
+                        setGpsLoading(true);
                         setGpsSuccess(false);
-                        return;
+
+                        if (!navigator.geolocation) {
+                          toast({ title: 'Location error', description: 'Geolocation is not supported on this device/browser', variant: 'destructive' });
+                          return;
+                        }
+
+                        // If the Permissions API is available, detect the common "denied" state and show guidance.
+                        try {
+                          if (navigator.permissions?.query) {
+                            const status = await navigator.permissions.query({ name: 'geolocation' });
+                            if (status?.state === 'denied') {
+                              toast({
+                                title: 'Location permission blocked',
+                                description: 'Enable Location permission for this app in Android Settings → Apps → Arvind Sweets → Permissions → Location, then try again.',
+                                variant: 'destructive'
+                              });
+                              return;
+                            }
+                          }
+                        } catch {
+                          // Ignore (Permissions API not supported or throws in some WebViews/TWAs)
+                        }
+
+                        navigator.geolocation.getCurrentPosition(
+                          (pos) => {
+                            const { latitude, longitude } = pos.coords;
+                            setShippingAddress((prev) => ({ ...prev, location: { lat: latitude, lng: longitude } }));
+                            setGpsSuccess(true);
+                            setGpsLoading(false);
+                          },
+                          (err) => {
+                            const code = err?.code;
+                            const friendly =
+                              code === 1
+                                ? 'Permission denied. Please allow Location permission and try again.'
+                                : code === 2
+                                  ? 'Location unavailable. Please turn on GPS and try again.'
+                                  : code === 3
+                                    ? 'Location request timed out. Please try again.'
+                                    : (err?.message || 'Failed to detect location');
+                            toast({ title: 'Location error', description: friendly, variant: 'destructive' });
+                            if (code === 1 || code === 2) {
+                              setShowMapPicker(true);
+                            }
+                            setGpsSuccess(false);
+                            setGpsLoading(false);
+                          },
+                          { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+                        );
+                      } finally {
+                        // If getCurrentPosition succeeds it will setGpsLoading(false) itself.
+                        // This ensures we don't get stuck on loading if we return early.
+                        setTimeout(() => setGpsLoading(false), 0);
                       }
-                      navigator.geolocation.getCurrentPosition(
-                        (pos) => {
-                          const { latitude, longitude } = pos.coords;
-                          setShippingAddress({ ...shippingAddress, location: { lat: latitude, lng: longitude } });
-                          setGpsSuccess(true);
-                        },
-                        (err) => {
-                          toast({ title: 'Location error', description: err.message || 'Failed to detect location', variant: 'destructive' });
-                          setGpsSuccess(false);
-                        },
-                        { enableHighAccuracy: true, timeout: 10000 }
-                      );
                     }}
                     className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg"
+                    disabled={gpsLoading}
                   >
-                    Use My Location
+                    {gpsLoading ? 'Detecting…' : 'Use My Location'}
                   </button>
 
                   <button
