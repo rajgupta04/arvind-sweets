@@ -7,6 +7,7 @@ import {
   FiPlus, 
   FiList,
   FiTag,
+  FiBell,
   FiLogOut,
   FiUser,
   FiX
@@ -23,6 +24,7 @@ function AdminSidebar({ open = false, onClose } = {}) {
     { path: '/admin/offers', label: 'Offers', icon: FiTag },
     { path: '/admin/coupons', label: 'Coupons', icon: FiTag },
     { path: '/admin/users', label: 'Users', icon: FiUser },
+    { path: '/admin/notifications', label: 'Notifications', icon: FiBell },
     { path: '/admin/settings/delivery', label: 'Delivery Settings', icon: FiList },
     { path: '/admin/messages', label: 'Customer Messages', icon: FiList },
     { path: '/admin/profile', label: 'Profile', icon: FiUser },

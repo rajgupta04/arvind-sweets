@@ -5,6 +5,7 @@ import { CartProvider } from './context/CartContext';
 import { AuthProvider } from './context/AuthContext';
 import { PublicSettingsProvider } from './context/PublicSettingsContext';
 import { NotificationsProvider } from './context/NotificationsContext';
+import AppNotificationsListener from './components/AppNotificationsListener';
 import PublicLayout from './components/PublicLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
@@ -42,6 +43,7 @@ import EditProduct from './admin/pages/EditProduct';
 import AdminProfile from './admin/pages/AdminProfile';
 import DeliverySettings from './admin/DeliverySettings.jsx';
 import AdminMessages from './admin/pages/AdminMessages.jsx';
+import NotificationSender from './admin/pages/NotificationSender.jsx';
 
 // Customer Pages
 import Profile from './pages/Profile';
@@ -51,6 +53,7 @@ function App() {
     <AuthProvider>
       <PublicSettingsProvider>
         <NotificationsProvider>
+          <AppNotificationsListener />
           <CartProvider>
             <Router
               future={{
@@ -68,6 +71,7 @@ function App() {
                 <Route path="/admin/offers" element={<AdminRoute><OffersList /></AdminRoute>} />
                 <Route path="/admin/coupons" element={<AdminRoute><CouponsList /></AdminRoute>} />
                 <Route path="/admin/messages" element={<AdminRoute><AdminMessages /></AdminRoute>} />
+                <Route path="/admin/notifications" element={<AdminRoute><NotificationSender /></AdminRoute>} />
                 <Route path="/admin/products/add" element={<AdminRoute><AddProduct /></AdminRoute>} />
                 <Route path="/admin/products/edit/:id" element={<AdminRoute><EditProduct /></AdminRoute>} />
                 <Route path="/admin/profile" element={<AdminRoute><AdminProfile /></AdminRoute>} />

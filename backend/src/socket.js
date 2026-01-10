@@ -91,18 +91,32 @@ export function initSocket(httpServer, { app } = {}) {
       if (!role) {
         try {
           const u = await User.findById(id).select('role').lean();
-          socket.data.user = { id: String(id), role: u?.role };
-          if (u?.role === 'admin') {
+          const hydratedRole = u?.role;
+          socket.data.user = { id: String(id), role: hydratedRole };
+
+          // Common rooms for targeting.
+          socket.join('users');
+          socket.join(`user:${String(id)}`);
+          if (hydratedRole) socket.join(`role:${String(hydratedRole)}`);
+
+          if (hydratedRole === 'admin') {
             socket.join('admins');
           }
           return;
         } catch {
           socket.data.user = { id: String(id), role: undefined };
+
+          socket.join('users');
+          socket.join(`user:${String(id)}`);
           return;
         }
       }
 
       socket.data.user = { id: String(id), role };
+
+      socket.join('users');
+      socket.join(`user:${String(id)}`);
+      socket.join(`role:${String(role)}`);
       if (role === 'admin') {
         socket.join('admins');
       }

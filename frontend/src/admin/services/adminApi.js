@@ -195,6 +195,31 @@ export const deleteOffer = async (id) => {
 };
 
 // ---------------------------
+// Notifications (Admin testing)
+// ---------------------------
+
+export const sendAdminNotification = async ({
+  audience = 'all',
+  role,
+  email,
+  userId,
+  title,
+  message,
+  url,
+} = {}) => {
+  const response = await API.post('/notifications/admin/send', {
+    audience,
+    role,
+    email,
+    userId,
+    title,
+    message,
+    url,
+  });
+  return response.data;
+};
+
+// ---------------------------
 // Coupons
 // ---------------------------
 
