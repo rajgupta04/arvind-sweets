@@ -16,6 +16,17 @@ export default function MobilePillNav() {
   const { user } = useContext(AuthContext);
   const { getCartItemsCount } = useContext(CartContext);
 
+  const staffOrdersTarget = useMemo(() => {
+    if (user?.role === 'delivery_boy') return '/delivery/my-packages';
+    if (user?.role === 'admin') return '/admin/orders';
+    return '/orders';
+  }, [user?.role]);
+
+  const ordersLabel = useMemo(() => {
+    if (user?.role === 'delivery_boy' || user?.role === 'admin') return 'Track';
+    return 'Orders';
+  }, [user?.role]);
+
   const items = useMemo(() => {
     const base = [
       { to: '/home', label: 'Home', Icon: FiHome },
@@ -24,7 +35,7 @@ export default function MobilePillNav() {
     ];
 
     if (user) {
-      base.push({ to: '/orders', label: 'Orders', Icon: FiPackage });
+      base.push({ to: staffOrdersTarget, label: ordersLabel, Icon: FiPackage });
       base.push({ to: '/profile', label: 'Profile', Icon: FiUser });
     } else {
       base.push({ to: '/login', label: 'Login', Icon: FiUser });
@@ -37,7 +48,7 @@ export default function MobilePillNav() {
     }
 
     return base.slice(0, 5);
-  }, [getCartItemsCount, user]);
+  }, [getCartItemsCount, ordersLabel, staffOrdersTarget, user]);
 
   return (
     <nav
