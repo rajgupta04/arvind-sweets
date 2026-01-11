@@ -20,6 +20,7 @@ async function showSystemNotification({ title, body, tag, url } = {}) {
       tag: String(tag || ''),
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-96.png',
+      vibrate: [200, 100, 200, 100, 300],
       renotify: Boolean(tag),
       silent: false,
       data: { url: url || '/admin/orders' },

@@ -121,7 +121,8 @@ self.addEventListener('push', (event) => {
     body: data.body || '',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-96.png',
-    vibrate: [100, 50, 100],
+    // More noticeable vibration pattern (Android may clamp/ignore based on device settings).
+    vibrate: [200, 100, 200, 100, 300],
     // Use tag so Android/Chrome can group notifications, and allow re-alerting on repeat.
     tag: data.tag || undefined,
     renotify: Boolean(data.tag),
