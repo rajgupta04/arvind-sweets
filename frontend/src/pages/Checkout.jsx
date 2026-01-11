@@ -16,6 +16,18 @@ import { getPublicSettings } from '../services/settingsService';
 
 const DEFAULT_DELIVERY_CHARGE = 50;
 
+function isFiniteNumber(n) {
+  return typeof n === 'number' && Number.isFinite(n);
+}
+
+function normalizeLatLng(value) {
+  if (!value) return null;
+  const lat = typeof value.lat === 'number' ? value.lat : Number(value.lat);
+  const lng = typeof value.lng === 'number' ? value.lng : Number(value.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng };
+}
+
 function formatMoney(n) {
   const v = Number(n) || 0;
   return `₹${v.toFixed(2)}`;
@@ -158,6 +170,7 @@ function Checkout() {
 
         if (defaultAddr && !hasAnyShippingText) {
           setSelectedSavedAddressId(String(defaultAddr._id || ''));
+          const nextLoc = normalizeLatLng(defaultAddr.location);
           setShippingAddress((prev) => ({
             ...prev,
             name: defaultAddr.name || prev.name,
@@ -166,9 +179,9 @@ function Checkout() {
             city: defaultAddr.city || '',
             state: defaultAddr.state || '',
             pincode: defaultAddr.pincode || '',
-            location: defaultAddr.location?.lat && defaultAddr.location?.lng ? defaultAddr.location : prev.location,
+            location: nextLoc || prev.location,
           }));
-          setGpsSuccess(Boolean(defaultAddr.location?.lat && defaultAddr.location?.lng));
+          setGpsSuccess(Boolean(nextLoc));
         }
       } catch {
         setSavedAddresses([]);
@@ -189,6 +202,8 @@ function Checkout() {
     const found = savedAddresses.find((a) => String(a?._id) === nextId);
     if (!found) return;
 
+    const nextLoc = normalizeLatLng(found.location);
+
     setShippingAddress((prev) => ({
       ...prev,
       name: found.name || prev.name,
@@ -197,12 +212,9 @@ function Checkout() {
       city: found.city || '',
       state: found.state || '',
       pincode: found.pincode || '',
-      location:
-        found.location && typeof found.location.lat === 'number' && typeof found.location.lng === 'number'
-          ? found.location
-          : prev.location,
+      location: nextLoc || prev.location,
     }));
-    setGpsSuccess(Boolean(found.location?.lat && found.location?.lng));
+    setGpsSuccess(Boolean(nextLoc));
   };
 
   const maybeAutoSaveAddress = async ({ setDefault } = {}) => {
@@ -266,14 +278,18 @@ function Checkout() {
 
     if (qualifiesForFreeDelivery) return 0;
 
-    const uLat = shippingAddress.location?.lat;
-    const uLng = shippingAddress.location?.lng;
+    const uLat = typeof shippingAddress.location?.lat === 'number'
+      ? shippingAddress.location.lat
+      : Number(shippingAddress.location?.lat);
+    const uLng = typeof shippingAddress.location?.lng === 'number'
+      ? shippingAddress.location.lng
+      : Number(shippingAddress.location?.lng);
     const sLat = shop?.lat;
     const sLng = shop?.lng;
 
     if (
       hasRange &&
-      typeof uLat === 'number' && typeof uLng === 'number' &&
+      Number.isFinite(uLat) && Number.isFinite(uLng) &&
       typeof sLat === 'number' && typeof sLng === 'number'
     ) {
       const distanceKm = Number(haversineDistanceKm(sLat, sLng, uLat, uLng).toFixed(2));
@@ -295,7 +311,14 @@ function Checkout() {
     // Keep it at 0 (backend will validate on submit and show an error).
     if (!publicSettingsLoaded) return 0;
     return 0;
-  }, [deliveryType, itemsPrice, publicSettings, publicSettingsLoaded, shippingAddress.location]);
+  }, [
+    deliveryType,
+    itemsPrice,
+    publicSettings,
+    publicSettingsLoaded,
+    shippingAddress.location?.lat,
+    shippingAddress.location?.lng,
+  ]);
 
   const deliveryBreakdown = useMemo(() => {
     if (deliveryType !== 'Delivery') return null;
@@ -324,12 +347,16 @@ function Checkout() {
 
     if (!hasRange) return null;
 
-    const uLat = shippingAddress.location?.lat;
-    const uLng = shippingAddress.location?.lng;
+    const uLat = typeof shippingAddress.location?.lat === 'number'
+      ? shippingAddress.location.lat
+      : Number(shippingAddress.location?.lat);
+    const uLng = typeof shippingAddress.location?.lng === 'number'
+      ? shippingAddress.location.lng
+      : Number(shippingAddress.location?.lng);
     const sLat = shop?.lat;
     const sLng = shop?.lng;
     if (
-      typeof uLat !== 'number' || typeof uLng !== 'number' ||
+      !Number.isFinite(uLat) || !Number.isFinite(uLng) ||
       typeof sLat !== 'number' || typeof sLng !== 'number'
     ) {
       return null;
@@ -363,7 +390,13 @@ function Checkout() {
       includedKm,
       rounding,
     };
-  }, [deliveryType, itemsPrice, publicSettings, shippingAddress.location]);
+  }, [
+    deliveryType,
+    itemsPrice,
+    publicSettings,
+    shippingAddress.location?.lat,
+    shippingAddress.location?.lng,
+  ]);
   const [couponCode, setCouponCode] = useState('');
   const [couponApplying, setCouponApplying] = useState(false);
   const [couponError, setCouponError] = useState('');
@@ -455,7 +488,8 @@ function Checkout() {
         return;
       }
 
-      if (typeof shippingAddress.location?.lat !== 'number' || typeof shippingAddress.location?.lng !== 'number') {
+      const normalized = normalizeLatLng(shippingAddress.location);
+      if (!normalized) {
         alert('Please select your location on the map (Use My Location is required).');
         setShowMapPicker(true);
         return;
@@ -509,8 +543,8 @@ function Checkout() {
         couponCode: appliedCoupon?.coupon?.code || appliedCoupon?.code || '',
         sweetCoinUsed: user ? sweetCoinApplied : 0,
         paymentStatus: 'Pending',
-        userLatitude: shippingAddress.location?.lat ?? null,
-        userLongitude: shippingAddress.location?.lng ?? null
+        userLatitude: normalizeLatLng(shippingAddress.location)?.lat ?? null,
+        userLongitude: normalizeLatLng(shippingAddress.location)?.lng ?? null
       };
 
       const response = user ? await placeOrder(orderPayload) : await placeGuestOrder(orderPayload);
@@ -676,7 +710,10 @@ function Checkout() {
                         navigator.geolocation.getCurrentPosition(
                           (pos) => {
                             const { latitude, longitude } = pos.coords;
-                            setShippingAddress((prev) => ({ ...prev, location: { lat: latitude, lng: longitude } }));
+                            setShippingAddress((prev) => ({
+                              ...prev,
+                              location: normalizeLatLng({ lat: latitude, lng: longitude }),
+                            }));
                             setGpsSuccess(true);
                             setGpsLoading(false);
                           },
@@ -729,8 +766,9 @@ function Checkout() {
                     <LocationPickerMap
                       value={shippingAddress.location}
                       onChange={(loc) => {
-                        setShippingAddress((prev) => ({ ...prev, location: loc }));
-                        setGpsSuccess(Boolean(loc?.lat && loc?.lng));
+                        const nextLoc = normalizeLatLng(loc);
+                        setShippingAddress((prev) => ({ ...prev, location: nextLoc }));
+                        setGpsSuccess(Boolean(nextLoc));
                       }}
                       height={260}
                     />
@@ -926,8 +964,10 @@ function Checkout() {
                 <div className="text-right">
                   {deliveryType !== 'Delivery' ? (
                     'Free'
-                  ) : deliveryCharge === 0 ? (
+                  ) : deliveryBreakdown?.isFree ? (
                     <span className="text-green-700">Free</span>
+                  ) : !normalizeLatLng(shippingAddress.location) ? (
+                    <span className="text-orange-700 text-sm">Pick location</span>
                   ) : (
                     <>
                       <div>{formatMoney(deliveryCharge)}</div>
