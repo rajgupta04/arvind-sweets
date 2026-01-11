@@ -122,6 +122,11 @@ self.addEventListener('push', (event) => {
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-96.png',
     vibrate: [100, 50, 100],
+    // Use tag so Android/Chrome can group notifications, and allow re-alerting on repeat.
+    tag: data.tag || undefined,
+    renotify: Boolean(data.tag),
+    // We can't force a custom sound for Web Push; this requests the default sound.
+    silent: false,
     data: {
       url: data.url || '/',
     },
