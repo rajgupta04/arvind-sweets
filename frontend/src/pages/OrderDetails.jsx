@@ -8,6 +8,7 @@ import { cancelMyOrder, getOrderDetails, submitOrderRatings } from "../services/
 import OrderStatusTracker from "./OrderStatusTracker";
 import LiveTrackingMap from "../components/LiveTrackingMap";
 import { createSocket } from "../services/socket";
+import { FiPhoneCall } from "react-icons/fi";
 
 const formatCurrency = (value = 0) =>
   new Intl.NumberFormat("en-IN", {
@@ -15,6 +16,12 @@ const formatCurrency = (value = 0) =>
     currency: "INR",
     maximumFractionDigits: 0,
   }).format(value);
+
+function toTelHref(phone) {
+  if (!phone) return '';
+  const cleaned = String(phone).trim().replace(/[\s()-]/g, '');
+  return cleaned ? `tel:${cleaned}` : '';
+}
 
 export default function OrderDetails() {
   const { user, loading: authLoading } = useContext(AuthContext);
@@ -523,13 +530,49 @@ export default function OrderDetails() {
 
           {trackingMessage && <p className="text-sm text-gray-600">{trackingMessage}</p>}
 
-          <div className="bg-gray-50 rounded-lg p-4 text-sm space-y-2">
-            {order.assignedDeliveryBoy && (
-              <div className="text-gray-700">
-                <span className="font-semibold">Delivery boy:</span>{' '}
-                {order.assignedDeliveryBoy.name}{order.assignedDeliveryBoy.phone ? ` (${order.assignedDeliveryBoy.phone})` : ''}
+          {order?.assignedDeliveryBoy ? (
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Delivery Partner</div>
+                  <div className="mt-1 flex items-center gap-2 min-w-0">
+                    <span className="text-xl" aria-hidden>🛵</span>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-gray-900 truncate">
+                        {order.assignedDeliveryBoy?.name || 'Delivery boy'}
+                      </div>
+                      <div className="text-sm text-gray-700 truncate">
+                        {order.assignedDeliveryBoy?.phone || 'Phone not available'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {order.assignedDeliveryBoy?.phone ? (
+                  <a
+                    href={toTelHref(order.assignedDeliveryBoy.phone)}
+                    className="shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-full bg-white border border-gray-200 text-gray-900 hover:border-orange-500 hover:text-orange-600 transition"
+                    aria-label={`Call ${order.assignedDeliveryBoy?.name || 'delivery partner'}`}
+                    title="Call"
+                  >
+                    <FiPhoneCall className="w-5 h-5" />
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    className="shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-full bg-white border border-gray-200 text-gray-400 cursor-not-allowed"
+                    aria-label="Call not available"
+                    title="Call not available"
+                  >
+                    <FiPhoneCall className="w-5 h-5" />
+                  </button>
+                )}
               </div>
-            )}
+            </div>
+          ) : null}
+
+          <div className="bg-gray-50 rounded-lg p-4 text-sm space-y-2">
             <div className="text-gray-700">
               <span className="font-semibold">Last update:</span>{' '}
               {displayLocation?.updatedAt ? new Date(displayLocation.updatedAt).toLocaleString() : '—'}

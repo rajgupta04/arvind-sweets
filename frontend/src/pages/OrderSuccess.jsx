@@ -3,6 +3,57 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import Loader from '../components/Loader';
 import { getOrderDetails } from '../services/orderService';
 import { getAdminThumbUrl } from '../lib/cloudinary.js';
+import { getPublicSettings } from '../services/settingsService';
+
+const DEFAULT_DELIVERY_CHARGE = 50;
+
+function formatMoney(n) {
+  const v = Number(n) || 0;
+  return `₹${v.toFixed(2)}`;
+}
+
+function timeToMinutes(hhmm) {
+  const m = String(hhmm || '').match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
+function nowMinutesInTimeZone(timeZone) {
+  try {
+    const fmt = new Intl.DateTimeFormat('en-GB', {
+      timeZone: timeZone || 'Asia/Kolkata',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const parts = fmt.formatToParts(new Date());
+    const h = Number(parts.find((p) => p.type === 'hour')?.value);
+    const min = Number(parts.find((p) => p.type === 'minute')?.value);
+    if (!Number.isFinite(h) || !Number.isFinite(min)) return null;
+    return h * 60 + min;
+  } catch {
+    return null;
+  }
+}
+
+function isNowInWindow(nowMin, startMin, endMin) {
+  if (nowMin == null || startMin == null || endMin == null) return false;
+  if (startMin === endMin) return true;
+  if (endMin > startMin) return nowMin >= startMin && nowMin < endMin;
+  return nowMin >= startMin || nowMin < endMin;
+}
+
+function pickActiveRangeRule(deliveryRange) {
+  const tz = deliveryRange?.timezone || 'Asia/Kolkata';
+  const nowMin = nowMinutesInTimeZone(tz);
+  const rules = Array.isArray(deliveryRange?.rules) ? deliveryRange.rules : [];
+  for (const r of rules) {
+    const s = timeToMinutes(r?.startTime);
+    const e = timeToMinutes(r?.endTime);
+    if (isNowInWindow(nowMin, s, e)) return r;
+  }
+  return null;
+}
 
 function OrderSuccess() {
   const { id } = useParams();
@@ -10,6 +61,7 @@ function OrderSuccess() {
   const navigate = useNavigate();
   const [order, setOrder] = useState(location.state?.order || null);
   const [loading, setLoading] = useState(!location.state?.order);
+  const [publicSettings, setPublicSettings] = useState(null);
 
   useEffect(() => {
     const fetchOrder = async () => {
@@ -26,6 +78,17 @@ function OrderSuccess() {
     };
     fetchOrder();
   }, [id, order, navigate]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const s = await getPublicSettings();
+        setPublicSettings(s || null);
+      } catch {
+        setPublicSettings(null);
+      }
+    })();
+  }, []);
 
   if (loading) {
     return (
@@ -51,6 +114,38 @@ function OrderSuccess() {
   };
   const etaTarget = order?.estimatedDelivery || order?.eta || null;
   const etaInfo = etaTarget ? formatETA(etaTarget) : null;
+
+  const deliveryInfo = (() => {
+    if (!order || order?.deliveryType !== 'Delivery') return null;
+    const total = Number(order?.deliveryCharge) || 0;
+    if (total <= 0) {
+      return { isFree: true, total: 0 };
+    }
+
+    const itemsPrice = Number(order?.itemsPrice) || 0;
+    const freeGoalEnabled = publicSettings?.cartGoals?.freeDelivery?.enabled !== false;
+    const freeThreshold = Number(publicSettings?.cartGoals?.freeDelivery?.threshold) || 250;
+    const qualifies = freeGoalEnabled && itemsPrice >= freeThreshold;
+    if (qualifies) {
+      return { isFree: true, total: 0, freeThreshold };
+    }
+
+    const rule = pickActiveRangeRule(publicSettings?.deliveryRange);
+    const perKmCharge = Number(rule?.perKmCharge) || null;
+
+    const base = DEFAULT_DELIVERY_CHARGE;
+    const distanceCharge = Math.max(0, Math.round(total - base));
+    const extraKm = perKmCharge ? Math.round(distanceCharge / perKmCharge) : null;
+
+    return {
+      isFree: false,
+      total,
+      freeThreshold,
+      base,
+      distanceCharge,
+      extraKm,
+    };
+  })();
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -99,6 +194,25 @@ function OrderSuccess() {
               <div className="ml-auto text-right">
                 <p className="text-sm text-gray-500">Total Paid</p>
                 <p className="text-2xl font-bold text-gray-900">₹{order.totalPrice?.toFixed(2)}</p>
+                {deliveryInfo && order?.deliveryType === 'Delivery' ? (
+                  <div className="mt-2 text-xs text-gray-600">
+                    {deliveryInfo.isFree ? (
+                      <span className="text-green-700">Delivery: Free</span>
+                    ) : (
+                      <div>
+                        <div>Delivery: {formatMoney(deliveryInfo.total)}</div>
+                        <div className="text-[11px] text-gray-500">
+                          Standard {formatMoney(deliveryInfo.base)} (below {formatMoney(deliveryInfo.freeThreshold)})
+                          {deliveryInfo.distanceCharge > 0 ? (
+                            <> • {formatMoney(deliveryInfo.distanceCharge)}{deliveryInfo.extraKm != null ? ` (for ${deliveryInfo.extraKm} extra km)` : ''}</>
+                          ) : (
+                            <> • {formatMoney(0)} (no extra km)</>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
               </div>
             </div>
 

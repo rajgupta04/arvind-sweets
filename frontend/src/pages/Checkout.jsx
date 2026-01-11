@@ -14,6 +14,13 @@ import { validateCoupon } from '../services/couponService';
 
 import { getPublicSettings } from '../services/settingsService';
 
+const DEFAULT_DELIVERY_CHARGE = 50;
+
+function formatMoney(n) {
+  const v = Number(n) || 0;
+  return `₹${v.toFixed(2)}`;
+}
+
 function haversineDistanceKm(aLat, aLng, bLat, bLng) {
   const toRad = (v) => (v * Math.PI) / 180;
   const R = 6371;
@@ -253,6 +260,12 @@ function Checkout() {
     const shop = publicSettings?.shop;
     const hasRange = Boolean(dr?.enabled) && Array.isArray(dr?.rules) && dr.rules.length > 0;
 
+    const freeGoalEnabled = publicSettings?.cartGoals?.freeDelivery?.enabled !== false;
+    const freeThreshold = Number(publicSettings?.cartGoals?.freeDelivery?.threshold) || 250;
+    const qualifiesForFreeDelivery = freeGoalEnabled && roundedItemsPrice >= freeThreshold;
+
+    if (qualifiesForFreeDelivery) return 0;
+
     const uLat = shippingAddress.location?.lat;
     const uLng = shippingAddress.location?.lng;
     const sLat = shop?.lat;
@@ -268,18 +281,89 @@ function Checkout() {
       if (!rule) return 0;
       const maxKm = Number(rule?.maxKm);
       if (Number.isFinite(maxKm) && distanceKm > maxKm + 1e-6) return 0;
-      return computeRangeDeliveryCharge({
+      const distanceCharge = computeRangeDeliveryCharge({
         itemsPrice: roundedItemsPrice,
         distanceKm,
         rule,
         rounding: dr?.rounding || 'ceil',
       });
+
+      return Math.max(0, Math.round(DEFAULT_DELIVERY_CHARGE + distanceCharge));
     }
 
-    // Avoid showing legacy ₹50/₹250 when backend uses range rules.
+    // If range rules are enabled, charge cannot be computed without valid coords.
+    // Keep it at 0 (backend will validate on submit and show an error).
     if (!publicSettingsLoaded) return 0;
     return 0;
   }, [deliveryType, itemsPrice, publicSettings, publicSettingsLoaded, shippingAddress.location]);
+
+  const deliveryBreakdown = useMemo(() => {
+    if (deliveryType !== 'Delivery') return null;
+
+    const roundedItemsPrice = Math.round(itemsPrice * 100) / 100;
+    const dr = publicSettings?.deliveryRange;
+    const shop = publicSettings?.shop;
+    const hasRange = Boolean(dr?.enabled) && Array.isArray(dr?.rules) && dr.rules.length > 0;
+
+    const freeGoalEnabled = publicSettings?.cartGoals?.freeDelivery?.enabled !== false;
+    const freeThreshold = Number(publicSettings?.cartGoals?.freeDelivery?.threshold) || 250;
+    const qualifiesForFreeDelivery = freeGoalEnabled && roundedItemsPrice >= freeThreshold;
+    if (qualifiesForFreeDelivery) {
+      return {
+        isFree: true,
+        freeThreshold,
+        baseCharge: 0,
+        distanceCharge: 0,
+        distanceKm: null,
+        extraKm: null,
+        perKmCharge: null,
+        includedKm: null,
+        rounding: dr?.rounding || 'ceil',
+      };
+    }
+
+    if (!hasRange) return null;
+
+    const uLat = shippingAddress.location?.lat;
+    const uLng = shippingAddress.location?.lng;
+    const sLat = shop?.lat;
+    const sLng = shop?.lng;
+    if (
+      typeof uLat !== 'number' || typeof uLng !== 'number' ||
+      typeof sLat !== 'number' || typeof sLng !== 'number'
+    ) {
+      return null;
+    }
+
+    const distanceKm = Number(haversineDistanceKm(sLat, sLng, uLat, uLng).toFixed(2));
+    const rule = pickActiveRangeRule(dr);
+    if (!rule) return null;
+
+    const includedKm = Number(rule?.includedKm) || 0;
+    const perKmCharge = Number(rule?.perKmCharge) || 0;
+    const rounding = dr?.rounding || 'ceil';
+    const distanceCharge = computeRangeDeliveryCharge({
+      itemsPrice: roundedItemsPrice,
+      distanceKm,
+      rule,
+      rounding,
+    });
+
+    const rawExtraKm = Math.max(0, distanceKm - includedKm);
+    const extraKm = rounding === 'exact' ? rawExtraKm : Math.ceil(rawExtraKm);
+
+    return {
+      isFree: false,
+      freeThreshold,
+      baseCharge: DEFAULT_DELIVERY_CHARGE,
+      distanceCharge,
+      distanceKm,
+      extraKm,
+      perKmCharge,
+      includedKm,
+      rounding,
+    };
+  }, [deliveryType, itemsPrice, publicSettings, shippingAddress.location]);
   const [couponCode, setCouponCode] = useState('');
   const [couponApplying, setCouponApplying] = useState(false);
   const [couponError, setCouponError] = useState('');
@@ -839,11 +923,29 @@ function Checkout() {
               </div>
               <div className="flex justify-between">
                 <span>Delivery</span>
-                <span>
-                  {deliveryType !== 'Delivery'
-                    ? 'Free'
-                    : (deliveryCharge === 0 ? <span className="text-green-700">Free</span> : `₹${deliveryCharge.toFixed(2)}`)}
-                </span>
+                <div className="text-right">
+                  {deliveryType !== 'Delivery' ? (
+                    'Free'
+                  ) : deliveryCharge === 0 ? (
+                    <span className="text-green-700">Free</span>
+                  ) : (
+                    <>
+                      <div>{formatMoney(deliveryCharge)}</div>
+                      {deliveryBreakdown && !deliveryBreakdown.isFree ? (
+                        <div className="mt-1 text-[11px] leading-snug text-gray-500">
+                          <div>Standard {formatMoney(deliveryBreakdown.baseCharge)} (below {formatMoney(deliveryBreakdown.freeThreshold)})</div>
+                          {deliveryBreakdown.distanceCharge > 0 && deliveryBreakdown.extraKm != null ? (
+                            <div>
+                              {formatMoney(deliveryBreakdown.distanceCharge)} (for {deliveryBreakdown.extraKm} extra km)
+                            </div>
+                          ) : (
+                            <div>{formatMoney(0)} (within {deliveryBreakdown.includedKm ?? 0} km included)</div>
+                          )}
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                </div>
               </div>
               {discountAmount > 0 ? (
                 <div className="flex justify-between text-green-700">

@@ -431,6 +431,10 @@ export const createOrder = async (req, res) => {
       const uLat = typeof userLatitude === 'number' ? userLatitude : loc?.lat;
       const uLng = typeof userLongitude === 'number' ? userLongitude : loc?.lng;
 
+      const freeGoalEnabled = settingsForRange?.cartGoals?.freeDelivery?.enabled !== false;
+      const freeThreshold = Number(settingsForRange?.cartGoals?.freeDelivery?.threshold) || FREE_DELIVERY_THRESHOLD;
+      const qualifiesForFreeDelivery = freeGoalEnabled && computedItemsPrice >= freeThreshold;
+
       if (
         typeof SHOP_LAT === 'number' && !Number.isNaN(SHOP_LAT) &&
         typeof SHOP_LNG === 'number' && !Number.isNaN(SHOP_LNG) &&
@@ -440,29 +444,38 @@ export const createOrder = async (req, res) => {
       }
 
       if (deliveryRangeEnabled) {
-        if (computedDistanceKm == null) {
-          return res.status(400).json({ message: 'Unable to compute delivery distance. Please reselect your location.' });
-        }
+        if (qualifiesForFreeDelivery) {
+          computedDeliveryCharge = 0;
+        } else {
+          // Base delivery charge (legacy) + distance-based charge (range rules)
+          const baseCharge = DEFAULT_DELIVERY_CHARGE;
 
-        const rule = pickActiveRangeRule(settingsForRange.deliveryRange);
-        if (!rule) {
-          return res.status(400).json({ message: DELIVERY_UNAVAILABLE_MESSAGE });
-        }
+          if (computedDistanceKm == null) {
+            return res.status(400).json({ message: 'Unable to compute delivery distance. Please reselect your location.' });
+          }
 
-        const maxKm = Number(rule?.maxKm);
-        if (Number.isFinite(maxKm) && computedDistanceKm > maxKm + 1e-6) {
-          return res.status(400).json({ message: DELIVERY_UNAVAILABLE_MESSAGE });
-        }
+          const rule = pickActiveRangeRule(settingsForRange.deliveryRange);
+          if (!rule) {
+            return res.status(400).json({ message: DELIVERY_UNAVAILABLE_MESSAGE });
+          }
 
-        computedDeliveryCharge = computeRangeDeliveryCharge({
-          itemsPrice: computedItemsPrice,
-          distanceKm: computedDistanceKm,
-          rule,
-          rounding: settingsForRange?.deliveryRange?.rounding || 'ceil',
-        });
+          const maxKm = Number(rule?.maxKm);
+          if (Number.isFinite(maxKm) && computedDistanceKm > maxKm + 1e-6) {
+            return res.status(400).json({ message: DELIVERY_UNAVAILABLE_MESSAGE });
+          }
+
+          const distanceCharge = computeRangeDeliveryCharge({
+            itemsPrice: computedItemsPrice,
+            distanceKm: computedDistanceKm,
+            rule,
+            rounding: settingsForRange?.deliveryRange?.rounding || 'ceil',
+          });
+
+          computedDeliveryCharge = Math.max(0, Math.round(baseCharge + distanceCharge));
+        }
       } else {
         // Legacy flat delivery charge behavior
-        computedDeliveryCharge = computedItemsPrice >= FREE_DELIVERY_THRESHOLD ? 0 : DEFAULT_DELIVERY_CHARGE;
+        computedDeliveryCharge = qualifiesForFreeDelivery ? 0 : DEFAULT_DELIVERY_CHARGE;
       }
     }
 
