@@ -17,6 +17,8 @@ import { validateCoupon } from '../services/couponService';
 import { getPublicSettings } from '../services/settingsService';
 
 const DEFAULT_DELIVERY_CHARGE = 50;
+// Whitelisted pincodes allowed for delivery orders
+const WHITELIST_PINCODES = ['822131', '824111', '841238', '822113'];
 
 function isFiniteNumber(n) {
   return typeof n === 'number' && Number.isFinite(n);
@@ -495,6 +497,14 @@ function Checkout() {
       if (!normalized) {
         alert('Please select your location on the map (Use My Location is required).');
         setShowMapPicker(true);
+        return;
+      }
+      // Whitelist pincode check: block checkout if pincode is not in allowed list
+      const pincodeStr = String(shippingAddress.pincode || '').trim();
+      if (pincodeStr && !WHITELIST_PINCODES.includes(pincodeStr)) {
+        alert(
+          `Delivery is Unavailable! for your Pincode. Please change your delivery pincode or choose Pickup.`
+        );
         return;
       }
     }
