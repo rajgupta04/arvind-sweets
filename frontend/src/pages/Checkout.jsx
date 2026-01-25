@@ -5,6 +5,8 @@ import { CartContext } from '../context/CartContext';
 import { AuthContext } from '../context/AuthContext';
 import { NotificationsContext } from '../context/NotificationsContext';
 import Loader from '../components/Loader';
+// Must match backend message exactly
+const DELIVERY_UNAVAILABLE_MESSAGE = "Sorry, we aren't available in your area. Contact store for more information.";
 import { FiMapPin, FiPackage } from 'react-icons/fi';
 import { placeOrder, placeGuestOrder } from '../services/orderService';
 import { toast } from '../components/ui/use-toast';
@@ -103,6 +105,7 @@ function computeRangeDeliveryCharge({ itemsPrice, distanceKm, rule, rounding }) 
 }
 
 function Checkout() {
+    const [showDeliveryUnavailable, setShowDeliveryUnavailable] = useState(false);
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
   const { cartItems, clearCart } = useContext(CartContext);
@@ -578,15 +581,51 @@ function Checkout() {
       clearCart();
       navigate(`/order-success/${order._id}`, { state: { orderId: order._id, total: order.totalPrice } });
     } catch (error) {
+      const msg = error.response?.data?.message || '';
+      if (msg === DELIVERY_UNAVAILABLE_MESSAGE) {
+        setShowDeliveryUnavailable(true);
+      } else {
+        alert(msg || 'Failed to place order. Please try again.');
+      }
       console.error('Error creating order:', error);
-      alert(error.response?.data?.message || 'Failed to place order. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+
   if (loading) {
     return <Loader />;
+  }
+
+  // Delivery unavailable popup
+  if (showDeliveryUnavailable) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-sm w-full flex flex-col items-center animate-bounce-in">
+          <div className="text-6xl mb-4 animate-bounce">📦🚫</div>
+          <h2 className="text-xl font-bold mb-2 text-center text-red-600">Currently Unavailable</h2>
+          <p className="text-gray-700 text-center mb-4">
+            Sorry, we're currently unavailable in your area.<br />
+            <span className="font-semibold">Contact store for more information!</span>
+          </p>
+          <button
+            className="mt-2 px-6 py-2 rounded-lg bg-orange-600 text-white font-semibold hover:bg-orange-700 transition"
+            onClick={() => setShowDeliveryUnavailable(false)}
+          >
+            Back to Checkout
+          </button>
+        </div>
+        <style>{`
+          @keyframes bounce-in {
+            0% { transform: scale(0.7); opacity: 0; }
+            60% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); }
+          }
+          .animate-bounce-in { animation: bounce-in 0.5s cubic-bezier(.68,-0.55,.27,1.55); }
+        `}</style>
+      </div>
+    );
   }
 
   return (

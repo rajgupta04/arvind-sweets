@@ -1,3 +1,10 @@
+// Store contact number
+const STORE_PHONE = '+91 7482813332';
+
+function toStoreTelHref() {
+  // Remove spaces and format for tel: link
+  return 'tel:' + STORE_PHONE.replace(/\s+/g, '');
+}
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
@@ -328,6 +335,8 @@ export default function OrderDetails() {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
 
+
+
       {/* ---------------------------------------------------------------- */}
       {/* 🔥 THANK YOU + ETA BANNER */}
       {/* ---------------------------------------------------------------- */}
@@ -520,75 +529,97 @@ export default function OrderDetails() {
       ) : null}
 
       {order?.deliveryType === 'Delivery' && (
-        <div className="bg-white rounded-xl shadow p-6 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Live Tracking</h2>
-            <span className="text-sm text-gray-600">
-              {trackingActive ? 'Active' : (order.orderStatus === 'Out for Delivery' && order.liveTrackingEnabled ? 'Unavailable' : 'At shop')}
-            </span>
-          </div>
+        <>
+          <div className="bg-white rounded-xl shadow p-6 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Live Tracking</h2>
+              <span className="text-sm text-gray-600">
+                {trackingActive ? 'Active' : (order.orderStatus === 'Out for Delivery' && order.liveTrackingEnabled ? 'Unavailable' : 'At shop')}
+              </span>
+            </div>
 
-          {trackingMessage && <p className="text-sm text-gray-600">{trackingMessage}</p>}
+            {trackingMessage && <p className="text-sm text-gray-600">{trackingMessage}</p>}
 
-          {order?.assignedDeliveryBoy ? (
-            <div className="bg-gray-50 rounded-lg p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Delivery Partner</div>
-                  <div className="mt-1 flex items-center gap-2 min-w-0">
-                    <span className="text-xl" aria-hidden>🛵</span>
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-gray-900 truncate">
-                        {order.assignedDeliveryBoy?.name || 'Delivery boy'}
-                      </div>
-                      <div className="text-sm text-gray-700 truncate">
-                        {order.assignedDeliveryBoy?.phone || 'Phone not available'}
+            {order?.assignedDeliveryBoy ? (
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Delivery Partner</div>
+                    <div className="mt-1 flex items-center gap-2 min-w-0">
+                      <span className="text-xl" aria-hidden>🛵</span>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-gray-900 truncate">
+                          {order.assignedDeliveryBoy?.name || 'Delivery boy'}
+                        </div>
+                        <div className="text-sm text-gray-700 truncate">
+                          {order.assignedDeliveryBoy?.phone || 'Phone not available'}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                {order.assignedDeliveryBoy?.phone ? (
-                  <a
-                    href={toTelHref(order.assignedDeliveryBoy.phone)}
-                    className="shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-full bg-white border border-gray-200 text-gray-900 hover:border-orange-500 hover:text-orange-600 transition"
-                    aria-label={`Call ${order.assignedDeliveryBoy?.name || 'delivery partner'}`}
-                    title="Call"
-                  >
-                    <FiPhoneCall className="w-5 h-5" />
-                  </a>
-                ) : (
-                  <button
-                    type="button"
-                    disabled
-                    className="shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-full bg-white border border-gray-200 text-gray-400 cursor-not-allowed"
-                    aria-label="Call not available"
-                    title="Call not available"
-                  >
-                    <FiPhoneCall className="w-5 h-5" />
-                  </button>
-                )}
+                  {order.assignedDeliveryBoy?.phone ? (
+                    <a
+                      href={toTelHref(order.assignedDeliveryBoy.phone)}
+                      className="shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-full bg-white border border-gray-200 text-gray-900 hover:border-orange-500 hover:text-orange-600 transition"
+                      aria-label={`Call ${order.assignedDeliveryBoy?.name || 'delivery partner'}`}
+                      title="Call"
+                    >
+                      <FiPhoneCall className="w-5 h-5" />
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled
+                      className="shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-full bg-white border border-gray-200 text-gray-400 cursor-not-allowed"
+                      aria-label="Call not available"
+                      title="Call not available"
+                    >
+                      <FiPhoneCall className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="bg-gray-50 rounded-lg p-4 text-sm space-y-2">
+              <div className="text-gray-700">
+                <span className="font-semibold">Last update:</span>{' '}
+                {displayLocation?.updatedAt ? new Date(displayLocation.updatedAt).toLocaleString() : '—'}
               </div>
             </div>
-          ) : null}
 
-          <div className="bg-gray-50 rounded-lg p-4 text-sm space-y-2">
-            <div className="text-gray-700">
-              <span className="font-semibold">Last update:</span>{' '}
-              {displayLocation?.updatedAt ? new Date(displayLocation.updatedAt).toLocaleString() : '—'}
-            </div>
+            {mapDeliveryLocation ? (
+              <LiveTrackingMap
+                delivery={mapDeliveryLocation}
+                customer={customerLocation}
+                followDelivery={trackingActive}
+              />
+            ) : (
+              <p className="text-sm text-gray-600">Map is not available (missing shop location).</p>
+            )}
           </div>
 
-          {mapDeliveryLocation ? (
-            <LiveTrackingMap
-              delivery={mapDeliveryLocation}
-              customer={customerLocation}
-              followDelivery={trackingActive}
-            />
-          ) : (
-            <p className="text-sm text-gray-600">Map is not available (missing shop location).</p>
-          )}
-        </div>
+          {/* CALL STORE TILE BELOW LIVE TRACKING */}
+          <div className="bg-white rounded-xl shadow p-6 flex items-center gap-4 mb-2 mt-4">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl" aria-hidden>🏪</span>
+              <div>
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Store Contact</div>
+                <div className="text-sm font-semibold text-gray-900">{STORE_PHONE}</div>
+              </div>
+            </div>
+            <div className="flex-1" />
+            <a
+              href={toStoreTelHref()}
+              className="shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-full bg-white border border-gray-200 text-gray-900 hover:border-orange-500 hover:text-orange-600 transition"
+              aria-label="Call Store"
+              title="Call Store"
+            >
+              <FiPhoneCall className="w-5 h-5" />
+            </a>
+          </div>
+        </>
       )}
 
       {/* ---------------------------------------------------------------- */}

@@ -192,6 +192,10 @@ function getFrontendBaseUrl() {
 // @route   POST /api/orders
 // @access  Private
 export const createOrder = async (req, res) => {
+  // Debug: log incoming coordinates for delivery orders
+  if (req.body?.deliveryType === 'Delivery') {
+    console.log('[Order] Incoming userLatitude:', req.body?.userLatitude, 'userLongitude:', req.body?.userLongitude);
+  }
   let sweetCoinUsedAppliedForThisRequest = 0;
   let sweetCoinDeductedUserIdForThisRequest = null;
 
@@ -213,6 +217,15 @@ export const createOrder = async (req, res) => {
 
     if (orderItems && orderItems.length === 0) {
       return res.status(400).json({ message: 'No order items' });
+    }
+
+    // Strict: For delivery orders, userLatitude/userLongitude must be present and valid numbers
+    if (deliveryType === 'Delivery') {
+      const lat = Number(req.body?.userLatitude);
+      const lng = Number(req.body?.userLongitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return res.status(400).json({ message: 'Please select a valid delivery location on the map.' });
+      }
     }
 
     // Load settings (used for delivery range + cart goals)
@@ -410,10 +423,9 @@ export const createOrder = async (req, res) => {
         return res.status(400).json({ message: 'Address line 1 is required for delivery' });
       }
 
-      const loc = shippingAddress?.location;
-      const uLat = typeof userLatitude === 'number' ? userLatitude : loc?.lat;
-      const uLng = typeof userLongitude === 'number' ? userLongitude : loc?.lng;
-      if (typeof uLat !== 'number' || typeof uLng !== 'number') {
+      const uLat = Number(userLatitude);
+      const uLng = Number(userLongitude);
+      if (!Number.isFinite(uLat) || !Number.isFinite(uLng)) {
         return res.status(400).json({ message: 'Location is required. Please enable GPS / pick location on map.' });
       }
     }
@@ -441,36 +453,39 @@ export const createOrder = async (req, res) => {
         typeof uLat === 'number' && typeof uLng === 'number'
       ) {
         computedDistanceKm = Number(haversineDistanceKm(SHOP_LAT, SHOP_LNG, uLat, uLng).toFixed(2));
+        console.log(`User distance calculated: ${computedDistanceKm} km`);
       }
 
       if (deliveryRangeEnabled) {
+        // Base delivery charge (legacy) + distance-based charge (range rules)
+        const baseCharge = DEFAULT_DELIVERY_CHARGE;
+
+        if (computedDistanceKm == null) {
+          return res.status(400).json({ message: 'Unable to compute delivery distance. Please reselect your location.' });
+        }
+
+        const rule = pickActiveRangeRule(settingsForRange.deliveryRange);
+        if (!rule) {
+          return res.status(400).json({ message: DELIVERY_UNAVAILABLE_MESSAGE });
+        }
+
+        const maxKm = Number(rule?.maxKm);
+        if (Number.isFinite(maxKm) && computedDistanceKm > maxKm + 1e-6) {
+          console.log(`AAH outside the range: userDistance (${computedDistanceKm} km) > maxKm (${maxKm} km)`);
+          return res.status(400).json({ message: DELIVERY_UNAVAILABLE_MESSAGE });
+        } else {
+          console.log('Yes, it is in range. Order successful.');
+        }
+
         if (qualifiesForFreeDelivery) {
           computedDeliveryCharge = 0;
         } else {
-          // Base delivery charge (legacy) + distance-based charge (range rules)
-          const baseCharge = DEFAULT_DELIVERY_CHARGE;
-
-          if (computedDistanceKm == null) {
-            return res.status(400).json({ message: 'Unable to compute delivery distance. Please reselect your location.' });
-          }
-
-          const rule = pickActiveRangeRule(settingsForRange.deliveryRange);
-          if (!rule) {
-            return res.status(400).json({ message: DELIVERY_UNAVAILABLE_MESSAGE });
-          }
-
-          const maxKm = Number(rule?.maxKm);
-          if (Number.isFinite(maxKm) && computedDistanceKm > maxKm + 1e-6) {
-            return res.status(400).json({ message: DELIVERY_UNAVAILABLE_MESSAGE });
-          }
-
           const distanceCharge = computeRangeDeliveryCharge({
             itemsPrice: computedItemsPrice,
             distanceKm: computedDistanceKm,
             rule,
             rounding: settingsForRange?.deliveryRange?.rounding || 'ceil',
           });
-
           computedDeliveryCharge = Math.max(0, Math.round(baseCharge + distanceCharge));
         }
       } else {
