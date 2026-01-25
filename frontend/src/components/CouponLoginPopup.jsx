@@ -76,9 +76,9 @@ export default function CouponLoginPopup() {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
       <div className="w-full max-w-3xl bg-white rounded-2xl shadow-xl overflow-hidden">
         <div className="grid grid-cols-1 md:grid-cols-2">
-          <div className="hidden md:block relative">
+          <div className="relative h-72 md:h-auto bg-center">
             {coupon.imageUrl ? (
-              <img src={coupon.imageUrl} alt="Coupon" className="h-full w-full object-cover" />
+              <img src={coupon.imageUrl} alt="Coupon" className="h-full w-full object-contain" />
             ) : (
               <div className="h-full w-full bg-gray-100" />
             )}
