@@ -722,6 +722,8 @@ function Checkout() {
                   type="tel"
                   placeholder="Phone Number"
                   value={shippingAddress.phone}
+                  minLength={10}
+                  maxLength={10}
                   onChange={(e) => setShippingAddress({ ...shippingAddress, phone: e.target.value })}
                   className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                   required
