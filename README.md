@@ -19,6 +19,7 @@ A complete MERN stack application for a sweet shop e-commerce platform with cust
 - ✅ **Product Management** - Create, Read, Update, Delete products
 - ✅ **Order Management** - View and update order statuses
 - ✅ **Customer Management** - View all registered customers
+- ✅ **Rewards Management** - Create, Read, Update, Delete SweetCoins
 
 ## 🛠 Tech Stack
 
